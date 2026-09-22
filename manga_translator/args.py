@@ -7,7 +7,6 @@ from .ocr import OCRS
 from .inpainting import INPAINTERS
 from .translators import VALID_LANGUAGES, TRANSLATORS, TranslatorChain
 from .upscaling import UPSCALERS
-from .colorization import COLORIZERS
 from .save import OUTPUT_FORMATS
 
 def url_decode(s):
@@ -128,21 +127,5 @@ g_batch.add_argument('--save-text-file', default='', type=str, help='Like --save
 parser_batch.add_argument('--prep-manual', action='store_true', help='Prepare for manual typesetting by outputting blank, inpainted images, plus copies of the original for reference')
 parser_batch.add_argument('--save-quality', default=100, type=int, help='Quality of saved JPEG image, range from 0 to 100 with 100 being best')
 parser_batch.add_argument('--config-file', default=None, type=str, help='path to the config file')
-
-# WebSocket mode
-parser_ws = subparsers.add_parser('ws', help='Run in WebSocket mode')
-parser_ws.add_argument('--host', default='127.0.0.1', type=str, help='Host for WebSocket service')
-parser_ws.add_argument('--port', default=5003, type=int, help='Port for WebSocket service')
-parser_ws.add_argument('--nonce', default=os.getenv('MT_WEB_NONCE') or None, type=str, help='Nonce for securing internal WebSocket communication')
-parser_ws.add_argument('--ws-url', default='ws://localhost:5000', type=str, help='Server URL for WebSocket mode')
-parser_ws.add_argument('--models-ttl', default='0', type=int, help='How long to keep models in memory in seconds after last use (0 means forever)')
-
-# API mode
-parser_api = subparsers.add_parser('shared', help='Run in API mode')
-parser_api.add_argument('--host', default='127.0.0.1', type=str, help='Host for API service')
-parser_api.add_argument('--port', default=5003, type=int, help='Port for API service')
-parser_api.add_argument('--nonce', default=os.getenv('MT_WEB_NONCE') or None, type=str, help='Nonce for securing internal API server communication, set to "None" to disable')
-parser_api.add_argument("--report", default=None,type=str, help='reports to server to register instance')
-parser_api.add_argument('--models-ttl', default='0', type=int, help='models TTL in memory in seconds')
 
 subparsers.add_parser('config-help', help='Print help information for config file')

@@ -14,7 +14,7 @@ BBOX_IMAGE_FOLDER = 'test/testdata/bboxes'
 os.makedirs(BBOX_IMAGE_FOLDER, exist_ok=True)
 
 def save_regions_to_image(path: str, regions: TextBlock, width: int, height: int):
-    img = np.zeros((height, width, 3))
+    img = np.zeros((height, width, 3), dtype=np.uint8)
     cv2.imwrite(path, visualize_textblocks(img, regions))
 
 def find_region_containing_line(line, regions):

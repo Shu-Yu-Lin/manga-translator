@@ -210,7 +210,6 @@ def add_color(bw_char_map, color, stroke_char_map, stroke_color):
 FALLBACK_FONTS = [
     os.path.join(BASE_PATH, 'fonts/Arial-Unicode-Regular.ttf'),
     os.path.join(BASE_PATH, 'fonts/msyh.ttc'),
-    os.path.join(BASE_PATH, 'fonts/msgothic.ttc'),
 ]
 FONT_SELECTION: List[freetype.Face] = []
 font_cache = {}

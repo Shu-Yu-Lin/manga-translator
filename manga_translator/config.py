@@ -30,13 +30,6 @@ class TranslatorChain:
             self.chain.append((translator, lang))
         self.translators, self.langs = list(zip(*self.chain))
 
-    def has_offline(self) -> bool:
-        """
-        Returns True if the chain contains offline translators.
-        """
-        from manga_translator.translators import OFFLINE_TRANSLATORS
-        return any(translator in OFFLINE_TRANSLATORS for translator in self.translators)
-
     def __eq__(self, __o: object) -> bool:
         if type(__o) is str:
             return __o == self.translators[0]
@@ -59,7 +52,6 @@ def hex2rgb(h):
 class Renderer(str, Enum):
     default = "default"
     manga2Eng = "manga2eng"
-    manga2EngPillow = "manga2eng_pillow"
     none = "none"
 
 class Alignment(str, Enum):
@@ -83,69 +75,28 @@ class InpaintPrecision(str, Enum):
 
 class Detector(str, Enum):
     default = "default"
-    dbconvnext = "dbconvnext"
     ctd = "ctd"
-    craft = "craft"
-    paddle = "paddle"
     none = "none"
 
 class Inpainter(str, Enum):
     default = "default"
     lama_large = "lama_large"
     lama_mpe = "lama_mpe"
-    sd = "sd"
     none = "none"
     original = "original"
 
-class Colorizer(str, Enum):
-    none = "none"
-    mc2 = "mc2"
-
 class Ocr(str, Enum):
-    ocr32px = "32px"
     ocr48px = "48px"
-    ocr48px_ctc = "48px_ctc"
     mocr = "mocr"
 
 class Translator(str, Enum):
-    youdao = "youdao"
-    baidu = "baidu"
-    deepl = "deepl"
-    papago = "papago"
-    caiyun = "caiyun"
-    chatgpt = "chatgpt"
-    chatgpt_2stage = "chatgpt_2stage"
     none = "none"
     original = "original"
-    sakura = "sakura"
-    deepseek = "deepseek"
-    groq = "groq"
-    gemini = "gemini"
-    gemini_2stage = "gemini_2stage"
     custom_openai = "custom_openai"
-    offline = "offline"
-    nllb = "nllb"
-    nllb_big = "nllb_big"
-    sugoi = "sugoi"
-    jparacrawl = "jparacrawl"
-    jparacrawl_big = "jparacrawl_big"
-    m2m100 = "m2m100"
-    m2m100_big = "m2m100_big"
-    m2m100_hf = "m2m100_hf"
-    m2m100_hf_big = "m2m100_hf_big"
-    mbart50 = "mbart50"
-    qwen2 = "qwen2"
-    qwen2_big = "qwen2_big"
 
     def __str__(self):
         return self.name
 
-    # Map 'openai' and any translator starting with 'gpt'* to 'chatgpt'
-    @classmethod
-    def _missing_(cls, value):
-        if value.startswith('gpt') or value == 'openai':
-            return cls.chatgpt
-        raise ValueError(f"{value} is not a valid {cls.__name__}")
 
 
 class Upscaler(str, Enum):
@@ -217,7 +168,7 @@ class UpscaleConfig(BaseModel):
     """Image upscale ratio applied before detection. Can improve text detection."""
 
 class TranslatorConfig(BaseModel):
-    translator: Translator = Translator.sugoi
+    translator: Translator = Translator.custom_openai
     """Language translator to use"""
     target_lang: str = 'ENG' #todo: validate VALID_LANGUAGES #todo: convert to enum
     """Destination language"""
@@ -272,7 +223,7 @@ class TranslatorConfig(BaseModel):
 class DetectorConfig(BaseModel):
     """"""
     detector: Detector =Detector.default
-    """"Text detector used for creating a text mask from an image, DO NOT use craft for manga, it\'s not designed for it"""
+    """"Text detector used for creating a text mask from an image"""
     detection_size: int = 2048
     """Size of image used for detection"""
     text_threshold: float = 0.5
@@ -298,18 +249,10 @@ class InpainterConfig(BaseModel):
     inpainting_precision: InpaintPrecision = InpaintPrecision.bf16
     """Inpainting precision for lama, use bf16 while you can."""
 
-class ColorizerConfig(BaseModel):
-    colorization_size: int = 576
-    """Size of image used for colorization. Set to -1 to use full image size"""
-    denoise_sigma: int = 30
-    """Used by colorizer and affects color strength, range from 0 to 255 (default 30). -1 turns it off."""
-    colorizer: Colorizer = Colorizer.none
-    """Colorization model to use."""
-
 class OcrConfig(BaseModel):
     use_mocr_merge: bool = False
     """Use bbox merge when Manga OCR inference."""
-    ocr: Ocr = Ocr.ocr48px
+    ocr: Ocr = Ocr.mocr
     """Optical character recognition (OCR) model to use"""
     min_text_length: int = 0
     """Minimum text length of a text region"""
@@ -330,8 +273,6 @@ class Config(BaseModel):
     """tanslator configs"""
     detector: DetectorConfig = DetectorConfig()
     """detector configs"""
-    colorizer: ColorizerConfig = ColorizerConfig()
-    """colorizer configs"""
     inpainter: InpainterConfig = InpainterConfig()
     """inpainter configs"""
     ocr: OcrConfig = OcrConfig()

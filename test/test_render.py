@@ -22,7 +22,7 @@ def save_result(path, img, regions):
 @pytest.mark.asyncio
 async def test_default_renderer():
     width, height = 1000, 1000
-    img = np.zeros((height, width, 3))
+    img = np.zeros((height, width, 3), dtype=np.uint8)
     regions = [
         TextBlock(
             [[[10, 10], [200, 10], [10, 400], [200, 400]]],

@@ -18,8 +18,6 @@ from .utils import (
     natural_sort,
 )
 
-# TODO: Dynamic imports to reduce ram usage in web(-server) mode. Will require dealing with args.py imports.
-
 async def dispatch(args: Namespace):
     args_dict = vars(args)
 
@@ -64,15 +62,6 @@ async def dispatch(args: Namespace):
                     textline.translation = apply_dictionary(textline.translation, post_dict)
                     logger.info(f'Post-translation dictionary applied: {textline.translation}')
 
-    elif args.mode == 'ws':
-        from manga_translator.mode.ws import MangaTranslatorWS
-        translator = MangaTranslatorWS(args_dict)
-        await translator.listen(args_dict)
-
-    elif args.mode == 'shared':
-        from manga_translator.mode.share import MangaShare
-        translator = MangaShare(args_dict)
-        await translator.listen(args_dict)
     elif args.mode == 'config-help':
         import json
         config = Config.schema()

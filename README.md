@@ -9,7 +9,6 @@ Last Updated: 2025/05/10
 
 
 > One-click translation of text in various images\
-> [中文说明](README_CN.md) | [Changelog](CHANGELOG_CN.md) \
 > Welcome to join our Discord <https://discord.gg/Ak8APNy4vb>
 
 This project aims to translate images that are unlikely to be professionally translated, such as comics/images on various group chats and image boards, making it possible for Japanese novices like me to understand the content.
@@ -23,24 +22,11 @@ This project is v2 of [Qiú wén zhuǎn yì zhì](https://github.com/PatchyVideo
 ## 📂 Directory
 
 *   [Showcase](#showcase)
-*   [Online Version](#online-version)
-*   [Rust Version](#rust-version)
 *   [Installation](#installation)
     *   [Local Setup](#local-setup)
-        *   [Using Pip/venv (Recommended)](#using-pipvenv-recommended)
-        *   [Notes for Windows Users](#notes-for-windows-users)
-    *   [Docker](#docker)
-        *   [Run Web Server](#run-web-server)
-            *   [Using Nvidia GPU](#using-nvidia-gpu)
-        *   [Use as CLI](#use-as-cli)
-        *   [Build Locally](#build-locally)
+        *   [Using uv](#using-uv)
 *   [Usage](#usage)
     *   [Local (Batch) Mode](#local-batch-mode)
-    *   [Web Mode](#web-mode)
-        *   [Old UI](#old-ui)
-        *   [New UI](#new-ui)
-    *   [API Mode](#api-mode)
-        *   [API Documentation](#api-documentation)
     *   [Config-help Mode](#config-help-mode)
 *   [Option and Configuration](#option-and-configuration)
     *   [Recommended Options](#recommended-options)
@@ -49,21 +35,16 @@ This project is v2 of [Qiú wén zhuǎn yì zhì](https://github.com/PatchyVideo
         *   [Basic Options](#basic-options)
         *   [Additional Options](#additional-options)
             *   [Local Mode Options](#local-mode-options)
-            *   [WebSocket Mode Options](#websocket-mode-options)
-            *   [API Mode Options](#api-mode-options)
-            *   [Web Mode Options](#web-mode-options-missing-some-basic-options-still-needs-to-be-added)
     *   [Configuration File](#configuration-file)
         *   [Render Options](#render-options)
         *   [Upscale Options](#upscale-options)
         *   [Translator Options](#translator-options)
         *   [Detector Options](#detector-options)
         *   [Inpainter Options](#inpainter-options)
-        *   [Colorizer Options](#colorizer-options)
         *   [OCR Options](#ocr-options)
         *   [Other Options](#other-options)
     *   [Language Code Reference](#language-code-reference)
     *   [Translator Reference](#translator-reference)
-    *   [Glossary](#glossary)
     *   [Replacement Dictionary](#replacement-dictionary)
     *   [Environment Variables Summary](#environment-variables-summary)
     *   [GPT Configuration Reference](#gpt-configuration-reference)
@@ -154,155 +135,34 @@ The following examples may not be frequently updated and may not represent the e
   </tbody>
 </table>
 
-## Online Version
-
-Official demo site (maintained by zyddnys): <https://touhou.ai/imgtrans/>\
-Browser script (maintained by QiroNT): <https://greasyfork.org/scripts/437569>
-
-- Note: If the online version is inaccessible, it might be due to Google GCP restarting the server. Please wait a moment for the service to restart.
-- The online version uses the latest version from the main branch.
-
-## Rust Version
-
-[Manga Image Translator Rust](https://github.com/frederik-uni/manga-image-translator-rust) may be easier to setup as its a compiled binary
-
-- Note: stable diffusion is not rewritten yet & only a cli version is available
-
 ## Installation
 
 ### Local Setup
 
-#### Using Pip/venv (Recommended)
+#### Using uv
+
+Requires [uv](https://docs.astral.sh/uv/). uv installs Python 3.12 (pinned in `.python-version`) and every dependency from `pyproject.toml` / `uv.lock`.
 
 ```bash
-# First, ensure you have Python 3.10 or later installed on your machine
-# The very latest version of Python might not be compatible with some PyTorch libraries yet
-$ python --version
-Python 3.10.6
-
 # Clone this repository
 $ git clone https://github.com/zyddnys/manga-image-translator.git
+$ cd manga-image-translator
 
-# Create a venv (optional, but recommended)
-$ python -m venv venv
+# Create .venv and install dependencies (including the dev group)
+$ uv sync
 
-# Activate the venv
-$ source venv/bin/activate
-
-# If you want to use the --use-gpu option, please visit https://pytorch.org/get-started/locally/ to install PyTorch, which needs to correspond to your CUDA version.
-# If you did not use venv to create a virtual environment, you need to add --upgrade --force-reinstall to the pip command to overwrite the currently installed PyTorch version.
-
-# Install dependencies
-$ pip install -r requirements.txt
+# Add or upgrade a dependency
+$ uv add <package>
+$ uv lock --upgrade && uv sync
 ```
 
-Models will be automatically downloaded to the `./models` directory at runtime.
+`--use-gpu` uses CUDA or Apple MPS automatically. Models will be automatically downloaded to the `./models` directory at runtime.
 
-#### Notes for Windows Users:
-
-Please install Microsoft C++ Build Tools ([Download](https://visualstudio.microsoft.com/vs/), [Instructions](https://stackoverflow.com/questions/40504552/how-to-install-visual-c-build-tools)) before performing the pip install, as some pip dependencies need it to compile. (See [#114](https://github.com/zyddnys/manga-image-translator/issues/114)).
-
-To use [CUDA](https://developer.nvidia.com/cuda-downloads?target_os=Windows&target_arch=x86_64) on Windows, install the correct PyTorch version as described on <https://pytorch.org/get-started/locally/>.
-
-### Docker
-
-Requirements:
-
-- Docker (19.03+ for CUDA / GPU acceleration)
-- Docker Compose (Optional, if you want to use the files in `demo/doc` folder)
-- Nvidia Container Runtime (Optional, if you want to use CUDA)
-
-This project supports Docker, with the image being `zyddnys/manga-image-translator:main`.
-This Docker image contains all the dependencies and models required for the project.
-Please note that this image is quite large (~15GB).
-
-#### Run Web Server
-
-You can start the Web Server (CPU) using the following command:
-> Note that you need to add the required environment variables using `-e` or `--env`
+Translation uses a local LLM through Ollama's OpenAI-compatible API:
 
 ```bash
-docker run \
-  --name manga_image_translator_cpu \
-  -p 5003:5003 \
-  --ipc=host \
-  --entrypoint python \
-  --rm \
-  -v /demo/doc/../../result:/app/result \
-  -v /demo/doc/../../server/main.py:/app/server/main.py \
-  -v /demo/doc/../../server/instance.py:/app/server/instance.py \
-  -e OPENAI_API_KEY='' \
-  -e OPENAI_API_BASE='' \
-  -e OPENAI_MODEL='' \
-  zyddnys/manga-image-translator:main \
-  server/main.py --verbose --start-instance --host=0.0.0.0 --port=5003
-```
-
-Or use the compose file
-> Note that you need to add the required environment variables in the file first
-
-```bash
-docker-compose -f demo/doc/docker-compose-web-with-cpu.yml up
-```
-
-The Web Server starts on port [8000](http://localhost:8000) by default, and the translation results will be saved in the `/result` folder.
-
-##### Using Nvidia GPU
-
-> To use a supported GPU, please read the `Docker` section above first. You will need some special dependencies.
-
-You can start the Web Server (GPU) using the following command:
-> Note that you need to add the required environment variables using `-e` or `--env`
-
-```bash
-docker run \
-  --name manga_image_translator_gpu \
-  -p 5003:5003 \
-  --ipc=host \
-  --gpus all \
-  --entrypoint python \
-  --rm \
-  -v /demo/doc/../../result:/app/result \
-  -v /demo/doc/../../server/main.py:/app/server/main.py \
-  -v /demo/doc/../../server/instance.py:/app/server/instance.py \
-  -e OPENAI_API_KEY='' \
-  -e OPENAI_API_BASE='' \
-  -e OPENAI_MODEL='' \
-  -e OPENAI_HTTP_PROXY='' \
-  zyddnys/manga-image-translator:main \
-  server/main.py --verbose --start-instance --host=0.0.0.0 --port=5003 --use-gpu
-```
-
-Or use the compose file (for Web Server + GPU):
-> Note that you need to add the required environment variables in the file first
-
-```bash
-docker-compose -f demo/doc/docker-compose-web-with-gpu.yml up
-```
-
-#### Use as CLI
-
-To use Docker via CLI (i.e., Batch Mode):
-> Some translation services require API keys to run, pass them to your docker container as environment variables.
-
-```bash
-docker run --env="DEEPL_AUTH_KEY=xxx" -v <targetFolder>:/app/<targetFolder> -v <targetFolder>-translated:/app/<targetFolder>-translated  --ipc=host --rm zyddnys/manga-image-translator:main local -i=/app/<targetFolder> <cli flags>
-```
-
-**Note:** If you need to reference files on your host, you will need to mount the relevant files as volumes into the `/app` folder inside the container. The CLI paths will need to be the internal Docker path `/app/...` and not the path on your host.
-
-#### Build Locally
-
-To build the docker image locally, you can run the following command (you need to have make tool installed on your machine):
-
-```bash
-make build-image
-```
-
-Then test the built image, run:
-> Some translation services require API keys to run, pass them to your docker container as environment variables. Add environment variables in the Dockerfile.
-```bash
-make run-web-server
+$ ollama pull gemma4:e4b
+$ export CUSTOM_OPENAI_MODEL=gemma4:e4b   # or put it in a .env file
 ```
 
 ## Usage
@@ -310,80 +170,32 @@ make run-web-server
 ### Local (Batch) Mode
 ```bash
 # Replace <path> with the path to your image folder or file.
-$ python -m manga_translator local -v -i <path>
+$ uv run python -m manga_translator local -v -i <path>
 # The results can be found in `<path_to_image_folder>-translated`.
 ```
-### Web Mode
-#### Old UI
-```bash
-# Start a web server.
-$ cd server
-$ python main.py --use-gpu
-# The web demo service address is http://127.0.0.1:8000
-```
-#### New UI
-[Documentation](../main/front/README.md)
-
-### API Mode
-```bash
-# Start a web server.
-$ cd server
-$ python main.py --use-gpu
-# The API service address is http://127.0.0.1:8001
-```
-#### API Documentation
-
-Read the openapi documentation at: `127.0.0.1:8000/docs`
-
-[FastAPI-html](https://cfbed.1314883.xyz/file/1741386061808_FastAPI%20-%20Swagger%20UI.html)
-
 ### Config-help Mode
 ```bash
-python -m manga_translator config-help
+uv run python -m manga_translator config-help
 ```
 
 ## Options and Configuration Description
 ### Recommended Options
 
-Detector:
+Source is Japanese manga; target is Traditional Chinese (`CHT`) or English (`ENG`).
 
-- English: ??
-- Japanese: ??
-- Chinese (Simplified): ??
-- Korean: ??
-- Using `{"detector":{"detector": "ctd"}}` can increase the number of text lines detected
-Update: Actual testing shows that default works better with related parameter adjustments in black and white comics.
-
-OCR:
-
-- English: ??
-- Japanese: 48px
-- Chinese (Simplified): ??
-- Korean: 48px
-
-Translator:
-
-- Japanese -> English: **Sugoi**
-- Chinese (Simplified) -> English: ??
-- Chinese (Simplified) -> Japanese: ??
-- Japanese -> Chinese (Simplified): sakura or opanai
-- English -> Japanese: ??
-- English -> Chinese (Simplified): ??
-
-Inpainter: lama_large
-
-Colorizer: **mc2**
+- Detector: `default` (try `ctd` to detect more text lines)
+- OCR: `mocr` (manga-ocr-base)
+- Translator: `custom_openai` with Ollama `gemma4:e4b`
+- Inpainter: `lama_large`
 
 #### Tips to Improve Translation Quality
 
 -   Small resolutions can sometimes trip up the detector, which is not so good at picking up irregular text sizes. To		
   circumvent this you can use an upscaler by specifying `upscale_ratio 2` or any other value
 -   If the rendered text is too small to read, specify `font_size_offset` or use the `--manga2eng` renderer, which will try to fit the detected text bubble rather than detected textline area.
--   Specify a font with `--font-path fonts/anime_ace_3.ttf` for example	
 -   Set `mask_dilation_offset` to 10~30 to increase the mask coverage and better wrap the source text
 -   change inpainter.
 -   Increasing the `box_threshold` can help filter out gibberish from OCR error detection to some extent.
--   Use `OpenaiTranslator` to load the glossary file (`custom_openai` cannot load it)
 -   When the image resolution is low, lower `detection_size`, otherwise it may cause some sentences to be missed. The opposite is true when the image resolution is high.
 -   When the image resolution is high, increase `inpainting_size`, otherwise it may not completely cover the mask, resulting in source text leakage. In other cases, you can increase `kernel_size` to reduce the accuracy of text removal so that the model gets a larger field of view (Note: Judge whether the text leakage is caused by inpainting based on the consistency between the source text and the translated text. If consistent, it is caused by inpainting, otherwise it is caused by text detection and OCR)
 
@@ -424,43 +236,10 @@ local                         run in batch translation mode
 --config-file CONFIG_FILE     Path to a configuration file (default: None)
 ```
 
-##### WebSocket Mode Options
-
-```text
-ws                  run in WebSocket mode
---host HOST         Host of the WebSocket service (default: 127.0.0.1)
---port PORT         Port of the WebSocket service (default: 5003)
---nonce NONCE       Nonce used to secure internal WebSocket communication
---ws-url WS_URL     Server URL for WebSocket mode (default: ws://localhost:5000)
---models-ttl MODELS_TTL  Time in seconds to keep models in memory after last use (0 means forever)
-```
-
-##### API Mode Options
-
-```text
-shared              run in API mode
---host HOST         Host of the API service (default: 127.0.0.1)
---port PORT         Port of the API service (default: 5003)
---nonce NONCE       Nonce used to secure internal API server communication, set to "None" to disable
---report REPORT     Report to server to register instance (default: None)
---models-ttl MODELS_TTL  TTL of models in memory in seconds (0 means forever)
-```
-
-##### Web Mode Options (missing some basic options, still needs to be added)
-
-```text
---host HOST           Host address (default: 127.0.0.1)
---port PORT           Port number (default: 8000)
---start-instance      Whether an instance of the translator should be started automatically
---nonce NONCE         Nonce used to secure internal Web Server communication, set to "None" to disable
---models-ttl MODELS_TTL  Time in seconds to keep models in memory after last use (0 means forever)
-```
-
-
 ### Configuration File
 
-Run `python -m manga_translator config-help >> config-info.json` to see the documentation for the JSON schema
-An example config file can be found in example/config-example.json
+Run `uv run python -m manga_translator config-help >> config-info.json` to see the documentation for the JSON schema
+An example config file can be found in examples/config-example.json
 
 <details>
   <summary>Expand the full config JSON</summary>
@@ -476,41 +255,10 @@ An example config file can be found in example/config-example.json
       "title": "Alignment",
       "type": "string"
     },
-    "Colorizer": {
-      "enum": [
-        "none",
-        "mc2"
-      ],
-      "title": "Colorizer",
-      "type": "string"
-    },
-    "ColorizerConfig": {
-      "properties": {
-        "colorization_size": {
-          "default": 576,
-          "title": "Colorization Size",
-          "type": "integer"
-        },
-        "denoise_sigma": {
-          "default": 30,
-          "title": "Denoise Sigma",
-          "type": "integer"
-        },
-        "colorizer": {
-          "$ref": "#/$defs/Colorizer",
-          "default": "none"
-        }
-      },
-      "title": "ColorizerConfig",
-      "type": "object"
-    },
     "Detector": {
       "enum": [
         "default",
-        "dbconvnext",
         "ctd",
-        "craft",
-        "paddle",
         "none"
       ],
       "title": "Detector",
@@ -553,7 +301,7 @@ An example config file can be found in example/config-example.json
           "type": "boolean"
         },
         "box_threshold": {
-          "default": 0.75,
+          "default": 0.7,
           "title": "Box Threshold",
           "type": "number"
         },
@@ -589,7 +337,6 @@ An example config file can be found in example/config-example.json
         "default",
         "lama_large",
         "lama_mpe",
-        "sd",
         "none",
         "original"
       ],
@@ -617,9 +364,7 @@ An example config file can be found in example/config-example.json
     },
     "Ocr": {
       "enum": [
-        "32px",
         "48px",
-        "48px_ctc",
         "mocr"
       ],
       "title": "Ocr",
@@ -634,7 +379,7 @@ An example config file can be found in example/config-example.json
         },
         "ocr": {
           "$ref": "#/$defs/Ocr",
-          "default": "48px"
+          "default": "mocr"
         },
         "min_text_length": {
           "default": 0,
@@ -645,6 +390,18 @@ An example config file can be found in example/config-example.json
           "default": 0,
           "title": "Ignore Bubble",
           "type": "integer"
+        },
+        "prob": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prob"
         }
       },
       "title": "OcrConfig",
@@ -736,7 +493,7 @@ An example config file can be found in example/config-example.json
           "title": "Font Size"
         },
         "rtl": {
-          "default": false,
+          "default": true,
           "title": "Rtl",
           "type": "boolean"
         }
@@ -755,31 +512,9 @@ An example config file can be found in example/config-example.json
     },
     "Translator": {
       "enum": [
-        "youdao",
-        "baidu",
-        "deepl",
-        "papago",
-        "caiyun",
-        "chatgpt",
         "none",
         "original",
-        "sakura",
-        "deepseek",
-        "groq",
-        "custom_openai",
-        "offline",
-        "nllb",
-        "nllb_big",
-        "sugoi",
-        "jparacrawl",
-        "jparacrawl_big",
-        "m2m100",
-        "m2m100_big",
-        "m2m100_hf",
-        "m2m100_hf_big",
-        "mbart50",
-        "qwen2",
-        "qwen2_big"
+        "custom_openai"
       ],
       "title": "Translator",
       "type": "string"
@@ -788,10 +523,10 @@ An example config file can be found in example/config-example.json
       "properties": {
         "translator": {
           "$ref": "#/$defs/Translator",
-          "default": "sugoi"
+          "default": "custom_openai"
         },
         "target_lang": {
-          "default": "CHS",
+          "default": "ENG",
           "title": "Target Lang",
           "type": "string"
         },
@@ -847,6 +582,26 @@ An example config file can be found in example/config-example.json
           ],
           "default": null,
           "title": "Selective Translation"
+        },
+        "enable_post_translation_check": {
+          "default": true,
+          "title": "Enable Post Translation Check",
+          "type": "boolean"
+        },
+        "post_check_max_retry_attempts": {
+          "default": 3,
+          "title": "Post Check Max Retry Attempts",
+          "type": "integer"
+        },
+        "post_check_repetition_threshold": {
+          "default": 20,
+          "title": "Post Check Repetition Threshold",
+          "type": "integer"
+        },
+        "post_check_target_lang_threshold": {
+          "default": 0.5,
+          "title": "Post Check Target Lang Threshold",
+          "type": "number"
         }
       },
       "title": "TranslatorConfig",
@@ -932,13 +687,17 @@ An example config file can be found in example/config-example.json
     "translator": {
       "$ref": "#/$defs/TranslatorConfig",
       "default": {
-        "translator": "sugoi",
-        "target_lang": "CHS",
+        "translator": "custom_openai",
+        "target_lang": "ENG",
         "no_text_lang_skip": false,
         "skip_lang": null,
         "gpt_config": null,
         "translator_chain": null,
-        "selective_translation": null
+        "selective_translation": null,
+        "enable_post_translation_check": true,
+        "post_check_max_retry_attempts": 3,
+        "post_check_repetition_threshold": 20,
+        "post_check_target_lang_threshold": 0.5
       }
     },
     "detector": {
@@ -951,16 +710,8 @@ An example config file can be found in example/config-example.json
         "det_auto_rotate": false,
         "det_invert": false,
         "det_gamma_correct": false,
-        "box_threshold": 0.75,
+        "box_threshold": 0.7,
         "unclip_ratio": 2.3
-      }
-    },
-    "colorizer": {
-      "$ref": "#/$defs/ColorizerConfig",
-      "default": {
-        "colorization_size": 576,
-        "denoise_sigma": 30,
-        "colorizer": "none"
       }
     },
     "inpainter": {
@@ -968,16 +719,23 @@ An example config file can be found in example/config-example.json
       "default": {
         "inpainter": "lama_large",
         "inpainting_size": 2048,
+        "inpainting_precision": "bf16"
       }
     },
     "ocr": {
       "$ref": "#/$defs/OcrConfig",
       "default": {
         "use_mocr_merge": false,
-        "ocr": "48px",
+        "ocr": "mocr",
         "min_text_length": 0,
-        "ignore_bubble": 0
+        "ignore_bubble": 0,
+        "prob": null
       }
+    },
+    "force_simple_sort": {
+      "default": false,
+      "title": "Force Simple Sort",
+      "type": "boolean"
     },
     "kernel_size": {
       "default": 3,
@@ -985,7 +743,7 @@ An example config file can be found in example/config-example.json
       "type": "integer"
     },
     "mask_dilation_offset": {
-      "default": 30,
+      "default": 20,
       "title": "Mask Dilation Offset",
       "type": "integer"
     }
@@ -1027,13 +785,12 @@ target_lang       The target language
 no_text_lang_skip Do not skip text that appears to be the target language
 skip_lang         Skip translation if the source image is one of the specified languages, comma-separated for multiple languages. Example: JPN,ENG
 gpt_config        Path to GPT config file, see README for more info
-translator_chain  Output of one translator is input to another until translated to target language. Example: --translator-chain "google:JPN;sugoi:ENG"
-selective_translation Select translator based on language detected in image. Note that if a language isn't defined, the first translation service will be used as a default. Example: --translator-chain "google:JPN;sugoi:ENG"
+translator_chain  Output of one translator is input to another until translated to target language. Example: --translator-chain "custom_openai:ENG"
 ```
 
 #### Detector Options
 ```
-detector          The text detector to use to create a text mask from the image, don't use craft for manga, it's not designed for that
+detector          The text detector to use to create a text mask from the image
 detection_size    The size of the image to use for detection
 text_threshold    Text detection threshold
 det_rotate        Rotate image for detection. Can improve detection
@@ -1049,13 +806,6 @@ unclip_ratio      How much to expand the text skeleton to form a bounding box
 inpainter         The inpainting model to use
 inpainting_size   The size of the image to use for inpainting (too large can cause out of memory)
 inpainting_precision Precision for lama inpainting, bf16 is an option
-```
-
-#### Colorizer Options
-```
-colorization_size The size of the image to use for colorization. Set to -1 to use the full image size
-denoise_sigma     Used for colorizer and affects color intensity, ranging from 0 to 255 (default 30). -1 to disable
-colorizer         The colorization model to use
 ```
 
 #### OCR Options
@@ -1107,58 +857,12 @@ FIL: Filipino (Tagalog)
 ```
 
 #### Translator Reference
-| Name | API Key | Offline | Note |
-|---------------|---------|---------|----------------------------------------------------------|
-| <s>google</s> | | | Temporarily disabled |
-| youdao | ✔️ | | Requires `YOUDAO_APP_KEY` and `YOUDAO_SECRET_KEY` |
-| baidu | ✔️ | | Requires `BAIDU_APP_ID` and `BAIDU_SECRET_KEY` |
-| deepl | ✔️ | | Requires `DEEPL_AUTH_KEY` |
-| caiyun | ✔️ | | Requires `CAIYUN_TOKEN` |
-| openai | ✔️ | | Requires `OPENAI_API_KEY` |
-| deepseek | ✔️ | | Requires `DEEPSEEK_API_KEY` |
-| groq | ✔️ | | Requires `GROQ_API_KEY` |
-| gemini | ✔️ | | Requires `GEMINI_API_KEY` |
-| papago | | | |
-| sakura | | | Requires `SAKURA_API_BASE` |
-| custom_openai | | | Requires `CUSTOM_OPENAI_API_BASE` `CUSTOM_OPENAI_MODEL` |
-| offline | | ✔️ | Use the most suitable offline translator for the language|
-| nllb | | ✔️ | Offline translation model |
-| nllb_big | | ✔️ | Larger NLLB model |
-| sugoi | | ✔️ | Sugoi V4.0 model |
-| jparacrawl | | ✔️ | Japanese translation model |
-| jparacrawl_big| | ✔️ | Larger Japanese translation model |
-| m2m100 | | ✔️ | Supports multilingual translation (requires NVIDIA/ctranslate2) |
-| m2m100_big | | ✔️ | Larger M2M100 model (requires NVIDIA/ctranslate2) |
-| m2m100_hf | | ✔️ | M2M100 418M via HuggingFace — works on PyTorch (Nvidia CUDA / AMD ROCm) |
-| m2m100_hf_big | | ✔️ | M2M100 1.2B via HuggingFace — works on PyTorch (Nvidia CUDA / AMD ROCm) |
-| mbart50 | | ✔️ | Multilingual translation model |
-| qwen2 | | ✔️ | Qwen2 model |
-| qwen2_big | | ✔️ | Larger Qwen2 model |
-| none | | ✔️ | Translate to empty text |
-| original | | ✔️ | Keep original text |
+| Name | Offline | Note |
+|---------------|---------|----------------------------------------------------------|
+| custom_openai | ✔️ | Local OpenAI-compatible server (Ollama). Requires `CUSTOM_OPENAI_MODEL` |
+| none | ✔️ | Translate to empty text |
+| original | ✔️ | Keep original text |
 
--   API Key: Indicates whether the translator requires API keys to be set as environment variables.
-To do this, you can create a .env file in the project root directory and include your API keys, for example:
-
-```env
-OPENAI_API_KEY=sk-xxxxxxx...
-DEEPL_AUTH_KEY=xxxxxxxx...
-```
-
--   Offline: Indicates whether the translator can be used offline.
-
--   Sugoi is created by mingshiba, please support him at <https://www.patreon.com/mingshiba>
-
-#### Glossary
-
--   mit_glossory: Sending a glossary to the AI model to guide its translation can effectively improve translation quality, for example, ensuring consistent translation of proper names and character names. It automatically extracts valid entries related to the text to be sent from the glossary, so there is no need to worry that a large number of entries in the glossary will affect the translation quality. (Only effective for openaitranslator, compatible with sakura_dict and galtransl_dict.)
-
--   sakura_dict: Sakura glossary, only effective for sakuratranslator. No automatic glossary feature.
-
-```env
-OPENAI_GLOSSARY_PATH=PATH_TO_YOUR_FILE
-SAKURA_DICT_PATH=PATH_TO_YOUR_FILE
-```
 #### Replacement Dictionary
 
 -  Using `--pre-dict` can correct common OCR errors or irrelevant special effect text before translation.
@@ -1171,37 +875,16 @@ This can achieve further optimization of the translation effect and make it poss
 
 | Environment Variable Name              | Description                                                                                              | Default Value                      | Remarks                                                                                                   |
 | :------------------------------------ | :-------------------------------------------------------------------------------------------------------- | :--------------------------------- | :-------------------------------------------------------------------------------------------------------- |
-| `BAIDU_APP_ID`                         | Baidu Translate appid                                                                                    | `''`                               |                                                                                                           |
-| `BAIDU_SECRET_KEY`                     | Baidu Translate secret key                                                                               | `''`                               |                                                                                                           |
-| `YOUDAO_APP_KEY`                       | Youdao Translate application ID                                                                          | `''`                               |                                                                                                           |
-| `YOUDAO_SECRET_KEY`                    | Youdao Translate application secret key                                                                  | `''`                               |                                                                                                           |
-| `DEEPL_AUTH_KEY`                       | DeepL Translate AUTH_KEY                                                                                 | `''`                               |                                                                                                           |
-| `OPENAI_API_KEY`                       | OpenAI API Key                                                                                           | `''`                               |                                                                                                           |
-| `OPENAI_MODEL`                         | OpenAI Model                                                                                        | `'chatgpt-4o-latest'`              |                                                                                                           |
-| `OPENAI_HTTP_PROXY`                    | OpenAI HTTP Proxy                                                                              | `''`                               | Replaces `--proxy`                                                                                         |
-| `OPENAI_GLOSSARY_PATH`                 | Path to OpenAI glossary                                                                        | `./dict/mit_glossary.txt`         |                                                                                                           |
-| `OPENAI_API_BASE`                      | OpenAI API Base URL                                                                            | `https://api.openai.com/v1`        | Defaults to official address                                                                               |
-| `GROQ_API_KEY`                         | Groq API Key                                                                                             | `''`                               |                                                                                                           |
-| `GROQ_MODEL`                           | Groq Model name                                                                                          | `'mixtral-8x7b-32768'`             |                                                                                                           |
-| `SAKURA_API_BASE`                      | SAKURA API Address                                                                                 | `http://127.0.0.1:8080/v1`         |                                                                                                           |
-| `SAKURA_VERSION`                       | SAKURA API Version                                                                                 | `'0.9'`                            | `0.9` or `0.10`                                                                                           |
-| `SAKURA_DICT_PATH`                     | Path to SAKURA dictionary                                                                          | `./dict/sakura_dict.txt`           |                                                                                                           |
-| `CAIYUN_TOKEN`                         | Caiyun Xiaoyi API access token                                                                           | `''`                               |                                                                                                           |
-| `GEMINI_API_KEY`                       | Gemini API Key                                                                                           | `''`                               |                                                                                                           |
-| `GEMINI_MODEL`                         | Gemini Model name                                                                                        | `'gemini-1.5-flash-002'`           |                                                                                                           |
-| `DEEPSEEK_API_KEY`                     | DeepSeek API Key                                                                                         | `''`                               |                                                                                                           |
-| `DEEPSEEK_API_BASE`                    | DeepSeek API Base URL                                                                                   | `https://api.deepseek.com`         |                                                                                                           |
-| `DEEPSEEK_MODEL`                       | DeepSeek Model name                                                                                      | `deepseek-chat`                  | Options: `deepseek-chat` or `deepseek-reasoner`                                                           |
 | `CUSTOM_OPENAI_API_KEY`                | Custom OpenAI API Key                                                    | `ollama`                         | Not needed for Ollama, but possibly required for other tools                                               |
 | `CUSTOM_OPENAI_API_BASE`               | Custom OpenAI API Base URL                                | `http://localhost:11434/v1`        | Use OLLAMA_HOST environment variable to change bind IP and port                                            |
-| `CUSTOM_OPENAI_MODEL`                  | Custom OpenAI compatible model name                                               | `''`                               | Example: `qwen2.5:7b`, ensure you pull and run it before usage                                             |
+| `CUSTOM_OPENAI_MODEL`                  | Custom OpenAI compatible model name                                               | `''`                               | Example: `gemma4:e4b`, ensure you pull and run it before usage                                             |
 | `CUSTOM_OPENAI_MODEL_CONF`             | Custom OpenAI compatible model configuration                                              | `''`                               | Example: `qwen2`                                                                                          |
 
 **Instructions for use:**
 
 1.  **Create `.env` file:** Create a file named `.env` in the project root directory.
 2.  **Copy and Paste:** Copy and paste the text above into the `.env` file.
-3.  **Fill in Keys:** Replace the content within `''` with your own API keys, IDs, etc.
+3.  **Fill in values:** e.g. `CUSTOM_OPENAI_MODEL=gemma4:e4b`.
 
 **Important Note:**
 
