@@ -1,0 +1,18 @@
+{
+  "render": {
+    "direction": "auto",
+    "rtl": true
+  },
+  "translator": {
+    "translator": "custom_openai",
+    "target_lang": "CHT",
+    "gpt_config": "configs/gpt_config.yaml"
+  },
+  "ocr": {
+    "ocr": "48px"
+  },
+  "inpainter": {
+    "inpainter": "lama_large",
+    "inpainting_precision": "fp32"
+  }
+}

@@ -12,7 +12,6 @@ from .generic2 import color_difference, is_right_to_left_char, is_valuable_char
 
 # determines render direction
 LANGUAGE_ORIENTATION_PRESETS = {
-    'CHS': 'auto',
     'CHT': 'auto',
     'CSY': 'h',
     'NLD': 'h',
@@ -374,34 +373,29 @@ class TextBlock(object):
             if d in ('h', 'v', 'hr', 'vr'):
                 return d
 
-            # 根据region中面积最大的文本框的宽高比来判断排版方向
+            # Orientation comes from the aspect ratio of the largest box in the region
             if len(self.lines) > 0:
-                # 计算每个检测框的面积和宽高比
                 max_area = 0
                 largest_box_aspect_ratio = 1
 
                 for line in self.lines:
-                    # 计算检测框的面积
                     line_polygon = Polygon(line)
                     area = line_polygon.area
 
                     if area > max_area:
                         max_area = area
-                        # 计算该检测框的宽高比
-                        # 获取检测框的边界框
                         x_coords = line[:, 0]
                         y_coords = line[:, 1]
                         width = np.max(x_coords) - np.min(x_coords)
                         height = np.max(y_coords) - np.min(y_coords)
                         largest_box_aspect_ratio = width / height if height > 0 else 1
 
-                # 根据面积最大的检测框的宽高比判断方向
                 if largest_box_aspect_ratio < 1:
                     return 'v'
                 else:
                     return 'h'
             else:
-                # 如果没有lines，则使用整体的宽高比作为fallback
+                # No lines to measure: fall back to the region's own aspect ratio
                 if self.aspect_ratio < 1:
                     return 'v'
                 else:

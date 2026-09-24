@@ -1,0 +1,9 @@
+# Post-translation dictionary: China wording -> Taiwan wording.
+# Applied after the model translates, so it is deterministic - the 4B model
+# will not hold a vocabulary rule consistently across a whole book.
+# Format: source[tab]target[tab][# comment]   (source is a regex, \1 etc. work)
+
+奶子	胸部	# body part
+攢	存	# to save up
+([0-9０-９一二三四五六七八九十百千萬万])圓	\1元	# currency, only after a number
+日圓	日元	# yen

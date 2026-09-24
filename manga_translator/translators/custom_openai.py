@@ -15,20 +15,18 @@ from .keys import CUSTOM_OPENAI_API_KEY, CUSTOM_OPENAI_API_BASE, CUSTOM_OPENAI_M
 
 
 class CustomOpenAiTranslator(ConfigGPT, CommonTranslator):
-    _INVALID_REPEAT_COUNT = 2  # 如果检测到"无效"翻译，最多重复 2 次
-    _MAX_REQUESTS_PER_MINUTE = 40  # 每分钟最大请求次数
-    _TIMEOUT = 40  # 在重试之前等待服务器响应的时间（秒）
-    _RETRY_ATTEMPTS = 3  # 在放弃之前重试错误请求的次数
-    _TIMEOUT_RETRY_ATTEMPTS = 3  # 在放弃之前重试超时请求的次数
-    _RATELIMIT_RETRY_ATTEMPTS = 3  # 在放弃之前重试速率限制请求的次数
+    _INVALID_REPEAT_COUNT = 2  # Retries when an "invalid" translation comes back
+    _MAX_REQUESTS_PER_MINUTE = 40  # Requests per minute
+    _TIMEOUT = 40  # Seconds to wait for a response before retrying
+    _RETRY_ATTEMPTS = 3  # Retries for a failed request
+    _TIMEOUT_RETRY_ATTEMPTS = 3  # Retries for a timed-out request
+    _RATELIMIT_RETRY_ATTEMPTS = 3  # Retries for a rate-limited request
 
-    # 最大令牌数量，用于控制处理的文本长度
+    # Token budget; also caps how much text goes into one prompt
     _MAX_TOKENS = 4096
 
-    # 是否返回原始提示，用于控制输出内容
     _RETURN_PROMPT = False
 
-    # 是否包含模板，用于决定是否使用预设的提示模板
     _INCLUDE_TEMPLATE = False
 
     def __init__(self, model=None, api_base=None, api_key=None, check_openai_key=False):
@@ -165,7 +163,8 @@ class CustomOpenAiTranslator(ConfigGPT, CommonTranslator):
             
 
             # Use regex to extract response 
-            response=self.extract_capture_groups(response, rf"{self.rgx_capture}")
+            # ponytail: an empty response means no translations, not a crashed page.
+            response=self.extract_capture_groups(response, rf"{self.rgx_capture}") or ''
 
 
             # Sometimes it will return line like "<|9>demo", and we need to fix it.
@@ -205,9 +204,6 @@ class CustomOpenAiTranslator(ConfigGPT, CommonTranslator):
 
             translations.extend([t.strip() for t in new_translations])
 
-        for t in translations:
-            if "I'm sorry, but I can't assist with that request" in t:
-                raise Exception('translations contain error text')
         self.logger.debug(translations)
         if self.token_count_last:
             self.logger.info(f'Used {self.token_count_last} tokens (Total: {self.token_count})')
@@ -231,6 +227,9 @@ class CustomOpenAiTranslator(ConfigGPT, CommonTranslator):
             max_tokens=self._MAX_TOKENS // 2,
             temperature=self.temperature,
             top_p=self.top_p,
+            # gemma4 thinks by default and burns the whole token budget before emitting
+            # anything, which returns an empty translation on text-dense pages.
+            extra_body={'reasoning_effort': 'none'},
         )
 
         self.logger.debug('\n-- GPT Response (raw) --')

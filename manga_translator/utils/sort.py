@@ -73,20 +73,20 @@ def sort_regions(
     xs = [r.center[0] for r in regions]
     ys = [r.center[1] for r in regions]
 
-    # 改进的分散度计算：使用标准差
+    # Spread is measured with standard deviation
     if len(regions) > 1:
         x_std = np.std(xs) if len(xs) > 1 else 0
         y_std = np.std(ys) if len(ys) > 1 else 0
 
-        # 使用标准差比值来判断排列方向
+        # Whichever axis is more spread out is the reading axis
         is_horizontal = x_std > y_std
     else:
-        # 只有一个文本块时，默认为纵向
+        # A single block has no spread to measure; assume vertical
         is_horizontal = False
 
     sorted_regions = []
     if is_horizontal:
-        # 横向更分散：先 x 再 y
+        # Wider spread horizontally: order by x, then y
         primary = sorted(regions, key=lambda r: -r.center[0] if right_to_left else r.center[0])
         group, prev = [], None
         for r in primary:
@@ -101,7 +101,7 @@ def sort_regions(
             group.sort(key=lambda r: r.center[1])
             sorted_regions += group
     else:
-        # 纵向更分散：先 y 再 x
+        # Wider spread vertically: order by y, then x
         primary = sorted(regions, key=lambda r: r.center[1])
         group, prev = [], None
         for r in primary:
@@ -180,7 +180,7 @@ def _sort_panels_fill(panels: List[Tuple[int, int, int, int]], right_to_left: bo
         # Start a new row from the current top-most panel
         base_y = remaining[0][1]
 
-        # Gather all panels whose top-y 距离 base_y 不超过阈值 → 同一行
+        # Panels within the threshold of base_y count as the same row
         row = []
         i = 0
         while i < len(remaining):
@@ -189,7 +189,7 @@ def _sort_panels_fill(panels: List[Tuple[int, int, int, int]], right_to_left: bo
             else:
                 i += 1
 
-        # Sort that row right-to-left (或 LTR) 再加入
+        # Sort that row right-to-left (or LTR) before appending
         row.sort(key=lambda p: (-p[0] if right_to_left else p[0]))
         ordered.extend(row)
 
@@ -234,22 +234,19 @@ def visualize_textblocks(canvas: np.ndarray, blk_list: List[TextBlock], show_pan
         x_text = 'x: %s' % bx1
         y_text = 'y: %s' % by1
 
-        # 添加描边效果，文本居中
         def put_text_with_outline(text, center_x, y, font_size=0.8, thickness=2, color=(127, 127, 255)):
 
             (text_width, text_height), baseline = cv2.getTextSize(
                 text, cv2.FONT_HERSHEY_SIMPLEX, font_size, thickness)
             text_x = center_x - text_width // 2
 
-            # 绘制描边
+            # Outline first, so the main text sits on top of it
             for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1), (-2, 0), (2, 0), (0, -2), (0, 2)]:
                 cv2.putText(canvas, text, (text_x + dx, y + dy),
                             cv2.FONT_HERSHEY_SIMPLEX, font_size, (35, 24, 22), thickness)
-            # 绘制原始颜色的主文本
             cv2.putText(canvas, text, (text_x, y),
                         cv2.FONT_HERSHEY_SIMPLEX, font_size, color, thickness)
 
-        # 在文本框水平中央位置绘制带描边的文本
         center_x = center[0]
         put_text_with_outline(angle_text, center_x, center[1] - 10)
         put_text_with_outline(x_text, center_x, center[1] + 15)

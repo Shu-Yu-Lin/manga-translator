@@ -48,7 +48,7 @@ class ConfigGPT:
         '- Adjust the translation to sound natural in {to_lang} while maintaining original meaning.\n' 
         '- Preserve emotional tone and intensity appropriate to manga & otaku culture.\n' 
         '- Ensure consistency in character voice and terminology.\n'             
-        '- Determine appropriate pronouns (他/她/我/你/你们/he/she/me/you) from context; do not add pronouns that do not exist in the original text.\n'  
+        '- Determine appropriate pronouns (他/她/我/你/你們/he/she/me/you) from context; do not add pronouns that do not exist in the original text.\n'  
         '- Refine based on the conclusions from the second step.\n'
         
         '## Translation Rules\n'  
@@ -61,18 +61,6 @@ class ConfigGPT:
     )
   
     _CHAT_SAMPLE = {
-        'Chinese (Simplified)': [
-            (
-                '<|1|>恥ずかしい… 目立ちたくない… 私が消えたい…\n'
-                '<|2|>きみ… 大丈夫⁉\n'
-                '<|3|>なんだこいつ 空気読めて ないのか…？'
-            ),
-            (
-                '<|1|>好尴尬…我不想引人注目…我想消失…\n'
-                '<|2|>你…没事吧⁉\n'
-                '<|3|>这家伙怎么看不懂气氛的…？'
-            )
-        ],
         'English': [
             (
                 '<|1|>恥ずかしい… 目立ちたくない… 私が消えたい…\n'
@@ -101,22 +89,6 @@ class ConfigGPT:
     }
 
     _JSON_SAMPLE = {
-        'Simplified Chinese': [
-            TranslationList(
-                TextList=[
-                    TextValue(ID=1,text="恥ずかしい… 目立ちたくない… 私が消えたい…"),
-                    TextValue(ID=2,text="きみ… 大丈夫⁉"),
-                    TextValue(ID=3,text="なんだこいつ 空気読めて ないのか…？")
-                ]
-            ),
-            TranslationList(
-                TextList=[
-                    TextValue(ID=1,text="好尴尬…我不想引人注目…我想消失…"),
-                    TextValue(ID=2,text="你…没事吧⁉"),
-                    TextValue(ID=3,text="这家伙怎么看不懂气氛的…？")
-                ]
-            )
-        ],
         'English': [
             TranslationList(
                 TextList=[

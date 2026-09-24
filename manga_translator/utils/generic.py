@@ -117,25 +117,23 @@ def get_digest(file_path: str) -> str:
     return h.hexdigest()
 
 def get_image_md5(image) -> str:
-    """计算PIL Image对象的MD5哈希值，确保相同图片内容产生相同的哈希值"""
+    """MD5 of a PIL Image's pixels, so identical images hash identically."""
     import io
     from PIL import Image
 
     try:
-        # 将PIL Image转换为字节数据进行MD5计算
         img_byte_arr = io.BytesIO()
-        # 统一转换为RGB格式以确保一致性
+        # Normalise to RGB so the same picture always hashes the same
         if hasattr(image, 'mode') and image.mode != 'RGB':
             image = image.convert('RGB')
         image.save(img_byte_arr, format='PNG')
         img_bytes = img_byte_arr.getvalue()
 
-        # 计算MD5哈希值
         h = hashlib.md5()
         h.update(img_bytes)
-        return h.hexdigest()[:8]  # 只取前8位，避免文件夹名过长
+        return h.hexdigest()[:8]  # 8 chars keeps folder names short
     except Exception as e:
-        # 如果计算失败，返回基于时间戳的fallback值
+        # Fall back to a timestamp if the image cannot be read
         import time
         return f"fallback_{int(time.time() * 1000)}"
 

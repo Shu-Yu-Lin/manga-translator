@@ -1,0 +1,6 @@
+# Shared pre-translation dictionary: fixes that apply to any Japanese manga.
+# Applied to the OCR'd Japanese before translation. Pass a per-book file after
+# this one to add names only that book needs.
+# Format: source[tab]target[tab][# comment]   (source is a regex, \1 etc. work)
+
+ちん	ちゃん	# cutesy honorific variant, normalise so it renders consistently

@@ -87,9 +87,10 @@ def general_parser(g_parser):
     g.add_argument('--use-gpu', action='store_true', help='Turn on/off gpu (auto switch between mps and cuda)')
     g.add_argument('--use-gpu-limited', action='store_true', help='Turn on/off gpu (excluding offline translator)')
     g_parser.add_argument('--font-path', default='', type=file_path, help='Path to font file')
-    g_parser.add_argument('--pre-dict', default=None, type=file_path, help='Path to the pre-translation dictionary file')
-    g_parser.add_argument('--post-dict', default=None, type=file_path,
-                        help='Path to the post-translation dictionary file')
+    g_parser.add_argument('--pre-dict', default=None, type=file_path, nargs='+',
+                          help='Pre-translation dictionary files, applied in order (shared one first, per-book after)')
+    g_parser.add_argument('--post-dict', default=None, type=file_path, nargs='+',
+                        help='Post-translation dictionary files, applied in order (shared one first, per-book after)')
     g_parser.add_argument('--kernel-size', default=3, type=int,
                         help='Set the convolution kernel size of the text erasure area to completely clean up text residues')
     g_parser.add_argument('--context-size', default=0, type=int, help='Pages of context are needed for translating the current page')

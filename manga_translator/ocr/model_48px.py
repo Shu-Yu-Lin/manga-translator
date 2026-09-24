@@ -90,16 +90,15 @@ class Model48pxOCR(OfflineOCR):
                 tmp = region_imgs[idx]
                 region[i, :, : W, :]=tmp
                 if verbose:
-                    # 保存OCR调试图片，使用优化的保存方式
+                    # Save a debug crop of what the OCR model saw
                     ocr_result_dir = os.environ.get('MANGA_OCR_RESULT_DIR', 'result/ocrs/')
                     os.makedirs(ocr_result_dir, exist_ok=True)
                     
-                    # 转换图片数据
                     img_data = cv2.cvtColor(region[i, :, :, :], cv2.COLOR_RGB2BGR)
                     if quadrilaterals[idx][1] == 'v':
                         img_data = cv2.rotate(img_data, cv2.ROTATE_90_CLOCKWISE)
                     
-                    # 限制OCR调试图片最大尺寸为200像素（OCR图片通常很小）
+                    # Cap debug crops at 200px - OCR inputs are small anyway
                     max_ocr_size = 200
                     height, width = img_data.shape[:2]
                     if max(height, width) > max_ocr_size:
@@ -108,7 +107,6 @@ class Model48pxOCR(OfflineOCR):
                         new_height = int(height * scale)
                         img_data = cv2.resize(img_data, (new_width, new_height), interpolation=cv2.INTER_AREA)
                     
-                    # 使用高压缩保存
                     compression_params = [cv2.IMWRITE_PNG_COMPRESSION, 9]
                     cv2.imwrite(os.path.join(ocr_result_dir, f'{ix}.png'), img_data, compression_params)
                 ix += 1

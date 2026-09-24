@@ -115,9 +115,9 @@ def resize_regions_to_font_size(img: np.ndarray, text_regions: List['TextBlock']
                         region.center, pts.reshape(1, -1), -region.angle,  
                         to_int=False  
                     ).reshape(-1, 4, 2)  
-                    # 移除边界限制，允许文本超出检测框边界
-                    # dst_points[..., 0] = dst_points[..., 0].clip(0, img.shape[1] - 1)  
-                    # dst_points[..., 1] = dst_points[..., 1].clip(0, img.shape[0] - 1)  
+                    # Text may exceed the detection box, but never the page itself -
+                    # off-canvas characters are simply lost (105cm rendered as 105cn).
+                    dst_points = shift_onto_page(dst_points, img.shape)
                     dst_points = dst_points.astype(np.int64)
                     single_axis_expanded = True
                     # logger.debug(f"Successfully expanded horizontal text width: xfact={scale_x:.2f}")  
@@ -148,9 +148,9 @@ def resize_regions_to_font_size(img: np.ndarray, text_regions: List['TextBlock']
                         region.center, pts.reshape(1, -1), -region.angle,  
                         to_int=False  
                     ).reshape(-1, 4, 2)  
-                    # 移除边界限制，允许文本超出检测框边界
-                    # dst_points[..., 0] = dst_points[..., 0].clip(0, img.shape[1] - 1)  
-                    # dst_points[..., 1] = dst_points[..., 1].clip(0, img.shape[0] - 1)  
+                    # Text may exceed the detection box, but never the page itself -
+                    # off-canvas characters are simply lost (105cm rendered as 105cn).
+                    dst_points = shift_onto_page(dst_points, img.shape)
                     dst_points = dst_points.astype(np.int64)
                     single_axis_expanded = True
                     # logger.debug(f"Successfully expanded vertical text width: xfact={scale_x:.2f}")  
@@ -212,9 +212,9 @@ def resize_regions_to_font_size(img: np.ndarray, text_regions: List['TextBlock']
                     scaled_unrotated_points = np.array(poly.exterior.coords[:4])  
 
                     dst_points = rotate_polygons(region.center, scaled_unrotated_points.reshape(1, -1), -region.angle, to_int=False).reshape(-1, 4, 2)  
-                    # 移除边界限制，允许文本超出检测框边界
-                    # dst_points[..., 0] = dst_points[..., 0].clip(0, img.shape[1] - 1)  
-                    # dst_points[..., 1] = dst_points[..., 1].clip(0, img.shape[0] - 1)  
+                    # Text may exceed the detection box, but never the page itself -
+                    # off-canvas characters are simply lost (105cm rendered as 105cn).
+                    dst_points = shift_onto_page(dst_points, img.shape)
                     dst_points = dst_points.astype(np.int64)  
                     dst_points = dst_points.reshape((-1, 4, 2))  
                     # logger.debug(f"Finished calculating scaled dst_points.")  
@@ -250,7 +250,8 @@ async def dispatch(
     # Resize regions that are too small
     dst_points_list = resize_regions_to_font_size(img, text_regions, font_size_fixed, font_size_offset, font_size_minimum)
 
-    # TODO: Maybe remove intersections
+    # Pull apart boxes that grew into each other
+    dst_points_list = shrink_overlapping_boxes(dst_points_list)
 
     # Render text
     for region, dst_points in tqdm(zip(text_regions, dst_points_list), '[render]', total=len(text_regions)):
@@ -259,6 +260,85 @@ async def dispatch(
             cv2.fillConvexPoly(render_mask, dst_points.astype(np.int32), 1)
         img = render(img, region, dst_points, hyphenate, line_spacing, disable_font_border)
     return img
+
+def shrink_overlapping_boxes(dst_points_list, min_scale: float = 0.55, overlap_tolerance: float = 0.08):
+    """
+    Shrink text boxes that run into each other.
+
+    Boxes are grown from the detected region and can end up covering a
+    neighbouring bubble - the cover title swallowing the author credit, or a
+    diagonal banner crossing the bubble beside it. Per-box fitting cannot see
+    this, because each box is individually valid. Shrink the larger box about
+    its centre until the pair only touches, which pulls the font down with it.
+    """
+    polys = [Polygon(pts[0]) for pts in dst_points_list]
+    for i in range(len(polys)):
+        for j in range(i + 1, len(polys)):
+            a, b = polys[i], polys[j]
+            if not a.is_valid or not b.is_valid or not a.intersects(b):
+                continue
+            smaller = min(a.area, b.area)
+            if smaller <= 0 or a.intersection(b).area / smaller <= overlap_tolerance:
+                continue
+            # Shrink whichever box is larger - it is the one that grew over the other
+            idx = i if a.area >= b.area else j
+            scale = 1.0
+            while scale > min_scale:
+                scale -= 0.05
+                shrunk = affinity.scale(polys[idx], xfact=scale, yfact=scale, origin='center')
+                other = polys[j] if idx == i else polys[i]
+                if not shrunk.intersects(other) or shrunk.intersection(other).area / min(shrunk.area, other.area) <= overlap_tolerance:
+                    break
+            polys[idx] = shrunk
+            dst_points_list[idx] = np.array(shrunk.exterior.coords[:4]).reshape(-1, 4, 2).astype(np.int64)
+    return dst_points_list
+
+
+def shift_onto_page(dst_points: np.ndarray, img_shape) -> np.ndarray:
+    """
+    Move a text box back inside the page instead of cropping it.
+
+    Clipping a box that hangs over the edge makes it narrow, which forces the
+    font down until the text is barely readable. Sliding it inside keeps the box
+    its full size; only a box larger than the page itself still gets clipped.
+    """
+    h, w = img_shape[0], img_shape[1]
+    for axis, limit in ((0, w - 1), (1, h - 1)):
+        low, high = dst_points[..., axis].min(), dst_points[..., axis].max()
+        if high - low > limit:
+            dst_points[..., axis] = dst_points[..., axis].clip(0, limit)
+        elif low < 0:
+            dst_points[..., axis] -= low
+        elif high > limit:
+            dst_points[..., axis] -= high - limit
+    return dst_points
+
+
+def fit_font_size(font_size: int, text: str, box_w: int, box_h: int, horizontal: bool,
+                  lang: str, hyphenate: bool, min_ratio: float = 0.6) -> int:
+    """
+    Largest font size at or below `font_size` whose laid-out text fits the box.
+
+    The calc_* helpers lay text out without rendering glyphs, so trying sizes is
+    cheap. Returns the floor size if nothing fits - clipped text beats no text.
+    """
+    floor = max(8, int(font_size * min_ratio))
+    for size in range(font_size, floor - 1, -1):
+        if horizontal:
+            lines, widths = text_render.calc_horizontal(size, text, box_w, box_h, lang, hyphenate)
+            # calc_horizontal widens max_width when a height overflow is unavoidable,
+            # so its lines can be wider than the box - check the real widths.
+            fits = len(lines) * size <= box_h and max(widths) <= box_w
+        else:
+            lines, heights = text_render.calc_vertical(size, text, box_h)
+            fits = len(lines) * size <= box_w and max(heights) <= box_h
+        if fits:
+            if size != font_size:
+                logger.debug(f'fit: {font_size}->{size} box={box_w}x{box_h} text={text[:20]!r}')
+            return size
+    logger.debug(f'fit: {font_size}->{floor} (floor) box={box_w}x{box_h} text={text[:20]!r}')
+    return floor
+
 
 def render(
     img,
@@ -293,9 +373,22 @@ def render(
 
     #print(f"Region text: {region.text}, forced_direction: {forced_direction}, render_horizontally: {render_horizontally}")
 
+    # ponytail: the region box only ever grows (capped at 1.1x), so a translation
+    # longer than the original used to render past the box and off the page edge.
+    # Shrink the font until the laid-out text fits, with a floor so it stays legible.
+    font_size = fit_font_size(
+        region.font_size,
+        region.get_translation_for_rendering(),
+        round(norm_h[0]),
+        round(norm_v[0]),
+        render_horizontally,
+        region.target_lang,
+        hyphenate,
+    )
+
     if render_horizontally:
         temp_box = text_render.put_text_horizontal(
-            region.font_size,
+            font_size,
             region.get_translation_for_rendering(),
             round(norm_h[0]),
             round(norm_v[0]),
@@ -309,7 +402,7 @@ def render(
         )
     else:
         temp_box = text_render.put_text_vertical(
-            region.font_size,
+            font_size,
             region.get_translation_for_rendering(),
             round(norm_v[0]),
             region.alignment,

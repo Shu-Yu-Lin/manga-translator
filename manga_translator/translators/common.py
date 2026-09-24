@@ -12,7 +12,6 @@ except Exception:
     readline = None
 
 VALID_LANGUAGES = {
-    'CHS': 'Chinese (Simplified)',
     'CHT': 'Chinese (Traditional)',
     'CSY': 'Czech',
     'NLD': 'Dutch',
@@ -41,7 +40,7 @@ VALID_LANGUAGES = {
 }
 
 ISO_639_1_TO_VALID_LANGUAGES = {
-    'zh': 'CHS',
+    'zh': 'CHT',
     'ja': 'JPN',
     'en': 'ENG',
     'ko': 'KOR',

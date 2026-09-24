@@ -1,0 +1,12 @@
+# Pre-translation dictionary for "凛子ちゃんはお外でシたい".
+# Applied to the OCR'd Japanese before it reaches the model, so names stay
+# consistent across the whole book instead of drifting page to page.
+# Layered on top of jp-names.pre.txt.
+# Format: source[tab]target[tab][# comment]
+
+りんこ	凛子	# the heroine's name in kana
+りんご	凛子	# OCR misreads りんこ as りんご on the cover profile
+ムッチングワールド	肉肉世界	# the in-story matching app
+ムッチング	肉肉	# same app, short form
+ムッチ	肉肉幣	# its in-app currency
+作8	作：	# OCR reads the colon in the author credit as an 8
