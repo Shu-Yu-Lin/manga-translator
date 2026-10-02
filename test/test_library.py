@@ -34,13 +34,21 @@ def test_book_lifecycle(tmp_path):
 
     window = LibraryWindow(root)  # book was left 'processing', so it loads as 'failed'
     assert window.books[0]["status"] == "failed"
+    window.run_pipeline = lambda book: None  # no real translation here
     window.start_job(window.books[0])
     assert not window.home.new_button.isEnabled()
-    for _ in book["pages"]:
-        window.tick()
+    (root / book["id"] / "translated" / "003.png").write_bytes(b"x")  # only page 3 got translated
+    window.update_progress()
+    assert window.cards[book["id"]].bar.value() == 1
+    window.finish_job()
     assert window.home.new_button.isEnabled()
-    assert load_books(root)[0]["status"] == "done"
-    assert (root / book["id"] / "translated" / "003.png").exists()
+    saved = load_books(root)[0]
+    assert saved["status"] == "done" and [p["status"] for p in saved["pages"]] == ["failed", "failed", "done"]
+
+    window.start_job(window.books[0])  # retranslate clears old output
+    assert not (root / book["id"] / "translated" / "003.png").exists()
+    window.finish_job()  # nothing translated
+    assert load_books(root)[0]["status"] == "failed"
 
     window.books[0]["dictionary"] = [["ルフィ", "Luffy"], ["a.b", ""]]
     window.start_job(window.books[0])

@@ -7,11 +7,12 @@ and ``dict.txt`` (the per-book pre-translation dictionary).
 import json
 import re
 import shutil
+import sys
 import time
 import uuid
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QProcess, QProcessEnvironment, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
 from PySide6.QtPdf import QPdfDocument
 from PySide6.QtWidgets import (
@@ -22,6 +23,7 @@ from PySide6.QtWidgets import (
     QToolButton, QVBoxLayout, QWidget,
 )
 
+REPO = Path(__file__).resolve().parents[3]
 DEFAULT_ROOT = Path.home() / "Library" / "Application Support" / "MangaStudio"
 IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
 LANGUAGES = {"CHT": "Traditional Chinese", "ENG": "English"}
@@ -434,8 +436,8 @@ class LibraryWindow(QMainWindow):
         self.books = load_books(self.root)
         self.cards = {}
         self.job = None  # the one book being translated
-        self.job_index = 0
-        self.timer = QTimer(self, interval=1000, timeout=self.tick)
+        self.proc = None
+        self.timer = QTimer(self, interval=1000, timeout=self.update_progress)
 
         self.home = HomeView()
         self.home.new_button.clicked.connect(self.new_book)
@@ -519,27 +521,68 @@ class LibraryWindow(QMainWindow):
             self.refresh()
 
     def start_job(self, book):
+        folder = self.root / book["id"]
+        for old in (folder / "translated").iterdir():
+            old.unlink()
         for page in book["pages"]:
             page["status"] = "pending"
         book["status"] = "processing"
         save_book(self.root, book)
-        self.job, self.job_index = book, 0
+        self.job = book
+        self.refresh()
+        try:
+            self.run_pipeline(book)
+        except Exception as e:
+            QMessageBox.warning(self, "Could not start translation", str(e))
+            self.finish_job()
+
+    def run_pipeline(self, book):
+        folder = self.root / book["id"]
+        base = REPO / "configs" / f"{book['target_lang'].lower()}.json"
+        if not base.exists():
+            raise FileNotFoundError(f"No translation config for {LANGUAGES[book['target_lang']]} yet.")
+        config = json.loads(base.read_text(encoding="utf-8"))
+        config["translator"]["gpt_config"] = str(REPO / "configs" / "gpt_config.yaml")
+        (folder / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
+        env = QProcessEnvironment.systemEnvironment()
+        if not env.contains("CUSTOM_OPENAI_MODEL"):
+            env.insert("CUSTOM_OPENAI_MODEL", "gemma4:e4b")
+        self.proc = QProcess(self)
+        self.proc.setProcessEnvironment(env)
+        self.proc.setWorkingDirectory(str(REPO))
+        self.proc.setProcessChannelMode(QProcess.MergedChannels)
+        self.proc.setStandardOutputFile(str(folder / "job.log"))
+        self.proc.finished.connect(self.finish_job)
+        self.proc.start(sys.executable, [
+            "-m", "manga_translator", "local", "-i", str(folder / "source"), "-o", str(folder / "translated"),
+            "--config-file", str(folder / "config.json"), "--use-gpu", "--attempts", "3", "--ignore-errors",
+            "--pre-dict", str(folder / "dict.txt"), "--post-dict", str(REPO / "configs" / "dict" / "tw.post.txt"),
+        ])
+        if self.proc.state() == QProcess.NotRunning:
+            raise RuntimeError(self.proc.errorString())
         self.timer.start()
+
+    def update_progress(self):
+        book = self.job
+        for page in book["pages"]:
+            if (self.root / book["id"] / "translated" / page["file"]).exists():
+                page["status"] = "done"
+        self.cards[book["id"]].bar.setValue(sum(p["status"] != "pending" for p in book["pages"]))
+
+    def finish_job(self, *_):
+        """Pages with no file in translated/ failed; a book with no page translated at all is failed."""
+        self.timer.stop()
+        book = self.job
+        for page in book["pages"]:
+            done = (self.root / book["id"] / "translated" / page["file"]).exists()
+            page["status"] = "done" if done else "failed"
+        book["status"] = "done" if any(p["status"] == "done" for p in book["pages"]) else "failed"
+        save_book(self.root, book)
+        self.job = self.proc = None
         self.refresh()
 
-    def tick(self):
-        book = self.job
-        page = book["pages"][self.job_index]
-        folder = self.root / book["id"]
-        # ponytail: fake translation (copies the page). Phase 2 swaps in the manga_translator subprocess.
-        shutil.copy(folder / "source" / page["file"], folder / "translated" / page["file"])
-        page["status"] = "done"
-        self.job_index += 1
-        if self.job_index < len(book["pages"]):
-            self.cards[book["id"]].bar.setValue(self.job_index)
-            return
-        self.timer.stop()
-        book["status"] = "done"
-        save_book(self.root, book)
-        self.job = None
-        self.refresh()
+    def closeEvent(self, event):
+        if self.proc:
+            self.proc.kill()  # the book stays 'processing' on disk and loads as failed next time
+            self.proc.waitForFinished(2000)
+        super().closeEvent(event)
