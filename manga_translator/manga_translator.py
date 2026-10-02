@@ -27,16 +27,15 @@ from .utils import (
     sort_regions,
 )
 
-from .detection import dispatch as dispatch_detection, prepare as prepare_detection, unload as unload_detection
-from .upscaling import dispatch as dispatch_upscaling, prepare as prepare_upscaling, unload as unload_upscaling
-from .ocr import dispatch as dispatch_ocr, prepare as prepare_ocr, unload as unload_ocr
+from .detection import dispatch as dispatch_detection, prepare as prepare_detection
+from .upscaling import dispatch as dispatch_upscaling, prepare as prepare_upscaling
+from .ocr import dispatch as dispatch_ocr, prepare as prepare_ocr
 from .textline_merge import dispatch as dispatch_textline_merge
 from .mask_refinement import dispatch as dispatch_mask_refinement
-from .inpainting import dispatch as dispatch_inpainting, prepare as prepare_inpainting, unload as unload_inpainting
+from .inpainting import dispatch as dispatch_inpainting, prepare as prepare_inpainting
 from .translators import (
     dispatch as dispatch_translation,
     prepare as prepare_translation,
-    unload as unload_translation,
 )
 from .translators.common import ISO_639_1_TO_VALID_LANGUAGES
 from .rendering import dispatch as dispatch_rendering, dispatch_eng_render
@@ -126,7 +125,6 @@ class MangaTranslator:
     _gpu_limited_memory: bool
     device: Optional[str]
     kernel_size: Optional[int]
-    models_ttl: int
     _progress_hooks: list[Any]
     result_sub_folder: str
     batch_size: int
@@ -141,7 +139,6 @@ class MangaTranslator:
         self._gpu_limited_memory = False
         self.ignore_errors = False
         self.verbose = False
-        self.models_ttl = 0
         self.batch_size = 1  # no batching by default
 
         self._progress_hooks = []
@@ -149,8 +146,6 @@ class MangaTranslator:
 
         params = params or {}
         
-        self._batch_contexts = []  # contexts for the batch
-        self._batch_configs = []   # configs for the batch
         self.disable_memory_optimization = params.get('disable_memory_optimization', False)
         # batch_concurrent  parse_init_params
         self.batch_concurrent = params.get('batch_concurrent', False)
@@ -165,12 +160,7 @@ class MangaTranslator:
         # The flag below controls whether to allow TF32 on cuDNN. This flag defaults to True.
         torch.backends.cudnn.allow_tf32 = True
 
-        self._model_usage_timestamps = {}
-        self._detector_cleanup_task = None
         self.prep_manual = params.get('prep_manual', None)
-        self.context_size = params.get('context_size', 0)
-        self.all_page_translations = []
-        self._original_page_texts = []  # source pages, used as context in concurrent mode
 
         # Debug image bookkeeping
         self._current_image_context = None  # context of the image being processed
@@ -294,7 +284,6 @@ class MangaTranslator:
         self.verbose = params.get('verbose', False)
         self.use_mtpe = params.get('use_mtpe', False)
         self.font_path = params.get('font_path', None)
-        self.models_ttl = params.get('models_ttl', 0)
         self.batch_size = params.get('batch_size', 1)
         
         # batch_concurrent
@@ -376,7 +365,7 @@ class MangaTranslator:
     def using_gpu(self):
         return self.device.startswith('cuda') or self.device == 'mps' or self.device == 'xpu'
 
-    async def translate(self, image: Image.Image, config: Config, image_name: str = None, skip_context_save: bool = False) -> Context:
+    async def translate(self, image: Image.Image, config: Config, image_name: str = None) -> Context:
         """
         Translates a single image.
 
@@ -418,36 +407,20 @@ class MangaTranslator:
                 logger.debug(f"Exception details: {traceback.format_exc()}")
 
         # preload and download models (not strictly necessary, remove to lazy load)
-        if ( self.models_ttl == 0 ):
-            logger.info('Loading models')
-            if config.upscale.upscale_ratio:
-                await prepare_upscaling(config.upscale.upscaler)
-            await prepare_detection(config.detector.detector)
-            await prepare_ocr(config.ocr.ocr, self.device)
-            await prepare_inpainting(config.inpainter.inpainter, self.device)
-            await prepare_translation(config.translator.translator_gen)
+        logger.info('Loading models')
+        if config.upscale.upscale_ratio:
+            await prepare_upscaling(config.upscale.upscaler)
+        await prepare_detection(config.detector.detector)
+        await prepare_ocr(config.ocr.ocr, self.device)
+        await prepare_inpainting(config.inpainter.inpainter, self.device)
+        await prepare_translation(config.translator.translator_gen)
 
         # translate
         ctx = await self._translate(config, ctx)
 
-        # Save at the very end, so retries are included
-        # Save translation results at the end of translation process to ensure final results are saved
-        if not skip_context_save and ctx.text_regions:
-            # Summarise this page as context for the next
-            page_translations = {r.text_raw if hasattr(r, "text_raw") else r.text: r.translation
-                                 for r in ctx.text_regions}
-            self.all_page_translations.append(page_translations)
-
-            page_original_texts = {i: (r.text_raw if hasattr(r, "text_raw") else r.text)
-                                  for i, r in enumerate(ctx.text_regions)}
-            self._original_page_texts.append(page_original_texts)
-
         return ctx
 
     async def _translate(self, config: Config, ctx: Context) -> Context:
-        # Start the background cleanup job once if not already started.
-        if self._detector_cleanup_task is None:
-            self._detector_cleanup_task = asyncio.create_task(self._detector_cleanup_job())
         ctx.img_colorized = ctx.input
 
         # -- Upscaling
@@ -667,13 +640,9 @@ class MangaTranslator:
         return ctx
 
     async def _run_upscaling(self, config: Config, ctx: Context):
-        current_time = time.time()
-        self._model_usage_timestamps[("upscaling", config.upscale.upscaler)] = current_time
         return (await dispatch_upscaling(config.upscale.upscaler, [ctx.img_colorized], config.upscale.upscale_ratio, self.device))[0]
 
     async def _run_detection(self, config: Config, ctx: Context):
-        current_time = time.time()
-        self._model_usage_timestamps[("detection", config.detector.detector)] = current_time
         result = await dispatch_detection(config.detector.detector, ctx.img_rgb, config.detector.detection_size, config.detector.text_threshold,
                                         config.detector.box_threshold,
                                         config.detector.unclip_ratio, config.detector.det_invert, config.detector.det_gamma_correct, config.detector.det_rotate,
@@ -681,40 +650,7 @@ class MangaTranslator:
                                         self.device, self.verbose)        
         return result
 
-    async def _unload_model(self, tool: str, model: str):
-        logger.info(f"Unloading {tool} model: {model}")
-        match tool:
-            case 'detection':
-                await unload_detection(model)
-            case 'inpainting':
-                await unload_inpainting(model)
-            case 'ocr':
-                await unload_ocr(model)
-            case 'upscaling':
-                await unload_upscaling(model)
-            case 'translation':
-                await unload_translation(model)
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()  # empty CUDA cache
-        elif torch.xpu.is_available():
-            torch.xpu.empty_cache()
-
-    # Background models cleanup job.
-    async def _detector_cleanup_job(self):
-        while True:
-            if self.models_ttl == 0:
-                await asyncio.sleep(1)
-                continue
-            now = time.time()
-            for (tool, model), last_used in list(self._model_usage_timestamps.items()):
-                if now - last_used > self.models_ttl:
-                    await self._unload_model(tool, model)
-                    del self._model_usage_timestamps[(tool, model)]
-            await asyncio.sleep(1)
-
     async def _run_ocr(self, config: Config, ctx: Context):
-        current_time = time.time()
-        self._model_usage_timestamps[("ocr", config.ocr.ocr)] = current_time
         
         # OCRverbose
         if self.verbose:
@@ -756,8 +692,6 @@ class MangaTranslator:
         return new_textlines
 
     async def _run_textline_merge(self, config: Config, ctx: Context):
-        current_time = time.time()
-        self._model_usage_timestamps[("textline_merge", "textline_merge")] = current_time
         text_regions = await dispatch_textline_merge(ctx.textlines, ctx.img_rgb.shape[1], ctx.img_rgb.shape[0],
                                                      verbose=self.verbose)
         for region in text_regions:
@@ -904,16 +838,6 @@ class MangaTranslator:
         
         return text_regions
 
-    async def _dispatch_with_context(self, config: Config, texts: list[str], ctx: Context):
-        return await dispatch_translation(
-            config.translator.translator_gen,
-            texts,
-            config.translator,
-            self.use_mtpe,
-            ctx,
-            'cpu' if self._gpu_limited_memory else self.device
-        )
-
     async def _run_text_translation(self, config: Config, ctx: Context):
         # text_regionsNone
         if not ctx.text_regions:
@@ -924,8 +848,6 @@ class MangaTranslator:
         if self.prep_manual:  
             config.translator.translator = Translator.none
     
-        current_time = time.time()
-        self._model_usage_timestamps[("translation", config.translator.translator)] = current_time
 
         # none
         # Add special handling for none translator  
@@ -953,7 +875,9 @@ class MangaTranslator:
                 # Automatically add context to ChatGPT, no change for other translators
                 texts = [region.text for region in ctx.text_regions]
                 translated_sentences = \
-                    await self._dispatch_with_context(config, texts, ctx)
+                    await dispatch_translation(
+                        config.translator.translator_gen, texts, config.translator,
+                        self.use_mtpe, ctx, 'cpu' if self._gpu_limited_memory else self.device)
             else:  
                 # none
                 # For none translator, create an empty translation list  
@@ -1200,14 +1124,10 @@ class MangaTranslator:
                                               config.mask_dilation_offset, config.ocr.ignore_bubble, self.verbose,self.kernel_size)
 
     async def _run_inpainting(self, config: Config, ctx: Context):
-        current_time = time.time()
-        self._model_usage_timestamps[("inpainting", config.inpainter.inpainter)] = current_time
         return await dispatch_inpainting(config.inpainter.inpainter, ctx.img_rgb, ctx.mask, config.inpainter, config.inpainter.inpainting_size, self.device,
                                          self.verbose)
 
     async def _run_text_rendering(self, config: Config, ctx: Context):
-        current_time = time.time()
-        self._model_usage_timestamps[("rendering", config.render.renderer)] = current_time
         if config.render.renderer == Renderer.none:
             output = ctx.img_inpainted
         # manga2eng currently only supports horizontal left to right rendering
@@ -1470,17 +1390,6 @@ class MangaTranslator:
         
         logger.info(f'Batch translation completed: processed {len(results)} images')
 
-        for ctx in results:
-            if ctx.text_regions:
-                # Summarise this page as context for the next
-                page_translations = {r.text_raw if hasattr(r, "text_raw") else r.text: r.translation
-                                     for r in ctx.text_regions}
-                self.all_page_translations.append(page_translations)
-
-                page_original_texts = {i: (r.text_raw if hasattr(r, "text_raw") else r.text)
-                                      for i, r in enumerate(ctx.text_regions)}
-                self._original_page_texts.append(page_original_texts)
-
         self._saved_image_contexts.clear()
         
         return results
@@ -1507,18 +1416,14 @@ class MangaTranslator:
                 logger.debug(f"Exception details: {traceback.format_exc()}")
 
         # preload and download models (not strictly necessary, remove to lazy load)
-        if ( self.models_ttl == 0 ):
-            logger.info('Loading models')
-            if config.upscale.upscale_ratio:
-                await prepare_upscaling(config.upscale.upscaler)
-            await prepare_detection(config.detector.detector)
-            await prepare_ocr(config.ocr.ocr, self.device)
-            await prepare_inpainting(config.inpainter.inpainter, self.device)
-            await prepare_translation(config.translator.translator_gen)
+        logger.info('Loading models')
+        if config.upscale.upscale_ratio:
+            await prepare_upscaling(config.upscale.upscaler)
+        await prepare_detection(config.detector.detector)
+        await prepare_ocr(config.ocr.ocr, self.device)
+        await prepare_inpainting(config.inpainter.inpainter, self.device)
+        await prepare_translation(config.translator.translator_gen)
 
-        # Start the background cleanup job once if not already started.
-        if self._detector_cleanup_task is None:
-            self._detector_cleanup_task = asyncio.create_task(self._detector_cleanup_job())
 
         ctx.img_colorized = ctx.input
 
@@ -1650,8 +1555,7 @@ class MangaTranslator:
                 # Configs are identical within a batch, so use the first
                 sample_config = batch[0][1] if batch else None
                 if sample_config:
-                    batch_contexts = [ctx for ctx, config in batch]
-                    translated_texts = await self._batch_translate_texts(all_texts, sample_config, batch[0][0], batch_contexts)
+                    translated_texts = await self._batch_translate_texts(all_texts, sample_config, batch[0][0])
                 else:
                     translated_texts = all_texts  # keep the original when translation is impossible
                     
@@ -1829,26 +1733,9 @@ class MangaTranslator:
         Translate concurrently, one request per image, instead of one huge batch.
         """
 
-        batch_original_texts = []  # source texts for this batch
-        if self.context_size > 0:
-            for i, (ctx, config) in enumerate(contexts_with_configs):
-                if ctx.text_regions:
-                    page_texts = {}
-                    for j, region in enumerate(ctx.text_regions):
-                        page_texts[j] = region.text
-                    batch_original_texts.append(page_texts)
-
-                    #  _original_page_texts
-                    while len(self._original_page_texts) <= len(self.all_page_translations) + i:
-                        self._original_page_texts.append({})
-
-                    self._original_page_texts[len(self.all_page_translations) + i] = page_texts
-                else:
-                    batch_original_texts.append({})
-
-        async def translate_single_context(ctx_config_pair_with_index):
+        async def translate_single_context(ctx_config_pair):
             """Translate a single context."""
-            ctx, config, page_index, batch_index = ctx_config_pair_with_index
+            ctx, config = ctx_config_pair
             try:
                 if not ctx.text_regions:
                     return ctx, config
@@ -1859,15 +1746,10 @@ class MangaTranslator:
                 if not texts:
                     return ctx, config
 
-                logger.debug(f'Translating {len(texts)} regions for single image in concurrent mode (page {page_index}, batch {batch_index})')
+                logger.debug(f'Translating {len(texts)} regions for single image in concurrent mode')
 
                 # Translate this image on its own
-                translated_texts = await self._batch_translate_texts(
-                    texts, config, ctx,
-                    page_index=page_index,
-                    batch_index=batch_index,
-                    batch_original_texts=batch_original_texts
-                )
+                translated_texts = await self._batch_translate_texts(texts, config, ctx)
 
                 # region
                 for i, region in enumerate(ctx.text_regions):
@@ -1977,12 +1859,8 @@ class MangaTranslator:
                 return ctx, config
         
         tasks = []
-        for i, ctx_config_pair in enumerate(contexts_with_configs):
-            # This page's index across the whole run
-            page_index = len(self.all_page_translations) + i
-            batch_index = i  # index within the batch
-            ctx_config_pair_with_index = (*ctx_config_pair, page_index, batch_index)
-            task = asyncio.create_task(translate_single_context(ctx_config_pair_with_index))
+        for ctx_config_pair in contexts_with_configs:
+            task = asyncio.create_task(translate_single_context(ctx_config_pair))
             tasks.append(task)
         
         logger.info(f'Starting concurrent translation of {len(tasks)} images...')
@@ -2014,7 +1892,7 @@ class MangaTranslator:
         logger.info(f'Concurrent translation completed: {len(final_results)} images processed')
         return final_results
 
-    async def _batch_translate_texts(self, texts: List[str], config: Config, ctx: Context, batch_contexts: List[Context] = None, page_index: int = None, batch_index: int = None, batch_original_texts: List[dict] = None) -> List[str]:
+    async def _batch_translate_texts(self, texts: List[str], config: Config, ctx: Context) -> List[str]:
         """
         Translate a list of texts through the normal translator interface.
 
@@ -2022,10 +1900,6 @@ class MangaTranslator:
             texts: the texts to translate
             config: the config object
             ctx: the context object
-            batch_contexts: the contexts in this batch
-            page_index: index of this page, used for context in concurrent mode
-            batch_index: index of this page within the batch
-            batch_original_texts: source texts for this batch
         """
         if config.translator.translator == Translator.none:
             return ["" for _ in texts]

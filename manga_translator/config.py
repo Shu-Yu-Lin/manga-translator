@@ -180,8 +180,6 @@ class TranslatorConfig(BaseModel):
     """Path to GPT config file, more info in README"""
     translator_chain: Optional[str] = None
     """Output of one translator goes in another. Example: --translator-chain "google:JPN;sugoi:ENG"."""
-    selective_translation: Optional[str] = None
-    """Select a translator based on detected language in image. Note the first translation service acts as default if the language isn\'t defined. Example: --translator-chain "google:JPN;sugoi:ENG".'"""
     
     # Post-translation validation
     enable_post_translation_check: bool = True
@@ -199,12 +197,7 @@ class TranslatorConfig(BaseModel):
     @property
     def translator_gen(self):
         if self._translator_gen is None:
-            if self.selective_translation is not None:
-                #todo: refactor TranslatorChain
-                trans =  translator_chain(self.selective_translation)
-                trans.target_lang = self.target_lang
-                self._translator_gen = trans
-            elif self.translator_chain is not None:
+            if self.translator_chain is not None:
                 trans = translator_chain(self.translator_chain)
                 trans.target_lang = trans.langs[0]
                 self._translator_gen = trans
