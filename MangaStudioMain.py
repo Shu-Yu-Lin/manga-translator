@@ -8,7 +8,11 @@
 #              and launches the main UI window.
 # ===============================================================
 
+import atexit
 import os
+import shutil
+import socket
+import subprocess
 import sys
 from PySide6.QtWidgets import QApplication, QMessageBox
 
@@ -31,7 +35,7 @@ sys.path.insert(0, APP_SOURCE_DIR)
 try:
     # Now that the path is configured, we can import the main application class.
     # We will modify main_window.py to contain a PySide class with the same name.
-    from app.ui.main_window import TranslatorStudioApp
+    from app.ui.library_window import LibraryWindow
 except ImportError as e:
     # A QApplication instance is needed to show a QMessageBox.
     # We create a dummy app here just for the error message.
@@ -41,10 +45,26 @@ except ImportError as e:
         "Fatal Import Error",
         "Could not import the main application class. "
         "Please check that the following structure is correct:\n\n"
-        "MangaStudio_Data -> app -> ui -> main_window.py\n\n"
+        "MangaStudio_Data -> app -> ui -> library_window.py\n\n"
         f"Error: {e}"
     )
     sys.exit(1)
+
+
+def start_ollama():
+    """Start `ollama serve` if nothing listens on 11434. Returns False if Ollama is missing."""
+    try:
+        socket.create_connection(("localhost", 11434), timeout=0.5).close()
+        return True  # already running (not ours, so we don't stop it)
+    except OSError:
+        pass
+    # Finder-launched apps get a minimal PATH, so also check the usual install dirs.
+    exe = shutil.which("ollama", path=os.environ.get("PATH", "") + ":/usr/local/bin:/opt/homebrew/bin")
+    if not exe:
+        return False
+    proc = subprocess.Popen([exe, "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    atexit.register(proc.terminate)
+    return True
 
 
 if __name__ == "__main__":
@@ -52,9 +72,13 @@ if __name__ == "__main__":
         # 1. Create the PySide Application instance
         app = QApplication(sys.argv)
 
+        if not start_ollama():
+            QMessageBox.warning(None, "Ollama not found",
+                                "Install Ollama and run `ollama pull gemma4:e4b`. Translation will fail until then.")
+
         # 2. Create an instance of our main window
         #    (The TranslatorStudioApp class will be a PySide window now)
-        main_window = TranslatorStudioApp()
+        main_window = LibraryWindow()
 
         # 3. Show the window
         main_window.show()
