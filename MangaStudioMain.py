@@ -27,14 +27,13 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 APP_SOURCE_DIR = os.path.join(BASE_DIR, "MangaStudio_Data")
 
 # Add the source directory to the Python system path.
-# This allows us to use `from app.ui.main_window import ...`
+# This allows us to use `from app.ui.library_window import ...`
 sys.path.insert(0, APP_SOURCE_DIR)
 
 
 # --- Application Launch ---
 try:
     # Now that the path is configured, we can import the main application class.
-    # We will modify main_window.py to contain a PySide class with the same name.
     from app.ui.library_window import LibraryWindow
 except ImportError as e:
     # A QApplication instance is needed to show a QMessageBox.
