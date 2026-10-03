@@ -17,7 +17,7 @@ from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
 from PySide6.QtPdf import QPdfDocument
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
-    QGraphicsOpacityEffect, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
+    QFrame, QGraphicsOpacityEffect, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QProgressBar,
     QPushButton, QRadioButton, QSizePolicy, QStackedWidget, QTableWidget, QTableWidgetItem,
     QToolButton, QVBoxLayout, QWidget,
@@ -294,11 +294,14 @@ class EditBookDialog(QDialog):
 
 # ---------------------------------------------------------------- home
 
-class BookCard(QWidget):
+class BookCard(QFrame):
     def __init__(self, root, book, menu):
         super().__init__()
+        self.setObjectName("card")
+        self.setStyleSheet("#card { border: 1px solid palette(mid); border-radius: 8px;"
+                           " background: palette(alternate-base); }")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setContentsMargins(8, 8, 8, 8)
 
         cover = QLabel()
         cover.setFixedSize(COVER_SIZE)
@@ -320,17 +323,27 @@ class BookCard(QWidget):
         elif failed_count(book):
             layout.addWidget(QLabel(f"{failed_count(book)} pages failed"))
 
-        title = QLabel()
-        title.setText(title.fontMetrics().elidedText(book["title"], Qt.ElideRight, COVER_SIZE.width() - 36))
-        row = QHBoxLayout()
-        row.addWidget(title, 1)
         if menu:
-            more = QToolButton(text="⋯", popupMode=QToolButton.InstantPopup)
+            more = QToolButton(cover, text="⋯", popupMode=QToolButton.InstantPopup)
             more.setAccessibleName(f"More actions for {book['title']}")
+            more.setFixedSize(26, 26)
+            more.move(COVER_SIZE.width() - 32, 6)
+            # dark disc keeps the button visible on any cover
+            more.setStyleSheet("QToolButton { background: rgba(0,0,0,150); color: white; border: none;"
+                               " border-radius: 13px; } QToolButton::menu-indicator { image: none; }")
             more.setMenu(menu)
             self.menu = menu  # QToolButton does not own its menu
-            row.addWidget(more)
-        layout.addLayout(row)
+
+        title = QLabel()
+        title.setStyleSheet("font-weight: bold;")
+        title.setText(title.fontMetrics().elidedText(book["title"], Qt.ElideRight, COVER_SIZE.width()))
+        layout.addWidget(title)
+        # always present (even if empty) so every card has the same height
+        description = QLabel()
+        description.setStyleSheet("color: gray;")
+        first_line = book["description"].split("\n")[0]
+        description.setText(description.fontMetrics().elidedText(first_line, Qt.ElideRight, COVER_SIZE.width()))
+        layout.addWidget(description)
         layout.addStretch()
         self.setToolTip(f"{book['title']}\n\n{book['description']}".strip())
 
@@ -348,7 +361,7 @@ class HomeView(QWidget):
         self.empty = QLabel("No manga yet. Click “+ New manga” to translate your first book.")
         self.empty.setAlignment(Qt.AlignCenter)
         self.list = QListWidget(viewMode=QListWidget.IconMode, resizeMode=QListWidget.Adjust,
-                                movement=QListWidget.Static, gridSize=QSize(190, 340))
+                                movement=QListWidget.Static, gridSize=QSize(200, 360))
         self.list.setSelectionMode(QAbstractItemView.NoSelection)
 
         layout = QVBoxLayout(self)
