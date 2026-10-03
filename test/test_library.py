@@ -53,3 +53,8 @@ def test_book_lifecycle(tmp_path):
     window.books[0]["dictionary"] = [["ルフィ", "Luffy"], ["a.b", ""]]
     window.start_job(window.books[0])
     assert (root / book["id"] / "dict.txt").read_text(encoding="utf-8") == "ルフィ Luffy\na\\.b\n"
+
+    window.confirm_delete = lambda book: True
+    window.books[0]["status"] = "done"
+    window.delete_book(window.books[0])
+    assert window.books == [] and not (root / book["id"]).exists()

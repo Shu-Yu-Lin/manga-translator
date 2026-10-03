@@ -511,11 +511,16 @@ class LibraryWindow(QMainWindow):
         else:
             self.refresh()
 
+    def confirm_delete(self, book):
+        box = QMessageBox(QMessageBox.Warning, "Delete manga",
+                          f"Delete “{book['title']}”? Its pages are removed from disk.", QMessageBox.Cancel, self)
+        delete = box.addButton("Delete", QMessageBox.DestructiveRole)
+        box.setDefaultButton(QMessageBox.Cancel)
+        box.exec()
+        return box.clickedButton() is delete
+
     def delete_book(self, book):
-        answer = QMessageBox.question(
-            self, "Delete manga", f"Delete “{book['title']}”? Its pages are removed from disk.",
-            QMessageBox.Delete | QMessageBox.Cancel, QMessageBox.Cancel)
-        if answer == QMessageBox.Delete:
+        if self.confirm_delete(book):
             shutil.rmtree(self.root / book["id"])
             self.books.remove(book)
             self.refresh()
