@@ -28,6 +28,7 @@ DEFAULT_ROOT = Path.home() / "Library" / "Application Support" / "MangaStudio"
 IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
 LANGUAGES = {"CHT": "Traditional Chinese", "ENG": "English"}
 COVER_SIZE = QSize(160, 240)
+PDF_LONG_EDGE = 2048
 
 
 # ---------------------------------------------------------------- storage
@@ -59,7 +60,9 @@ def import_files(dest, files):
         names = []
         for i in range(doc.pageCount()):
             name = f"{i + 1:03d}.png"
-            doc.render(i, (doc.pagePointSize(i) * 2).toSize()).save(str(dest / name))  # 144 dpi
+            size = doc.pagePointSize(i)
+            # 2048 px long edge: the detector and OCR need big pages; a 144 dpi render was ~600x850
+            doc.render(i, (size * (PDF_LONG_EDGE / max(size.width(), size.height()))).toSize()).save(str(dest / name))
             names.append(name)
         return names
     paths = sorted(files, key=natural_key)

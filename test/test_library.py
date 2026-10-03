@@ -5,10 +5,11 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).parent.parent / "MangaStudio_Data"))
 
-from PySide6.QtGui import QImage
+from PySide6.QtCore import QMarginsF, QSizeF
+from PySide6.QtGui import QImage, QPageSize, QPdfWriter, QPainter
 from PySide6.QtWidgets import QApplication
 
-from app.ui.library_window import LibraryWindow, create_book, load_books, validate_files
+from app.ui.library_window import LibraryWindow, create_book, import_files, load_books, validate_files
 
 app = QApplication.instance() or QApplication([])
 
@@ -58,3 +59,14 @@ def test_book_lifecycle(tmp_path):
     window.books[0]["status"] = "done"
     window.delete_book(window.books[0])
     assert window.books == [] and not (root / book["id"]).exists()
+
+
+def test_pdf_pages_render_at_2048(tmp_path):
+    pdf = QPdfWriter(str(tmp_path / "a.pdf"))
+    pdf.setPageSize(QPageSize(QSizeF(105, 148), QPageSize.Millimeter))  # A6, ~297x420 pt
+    painter = QPainter(pdf)
+    painter.drawText(100, 100, "hi")
+    painter.end()
+    [name] = import_files(tmp_path / "src", [str(tmp_path / "a.pdf")])
+    size = QImage(str(tmp_path / "src" / name)).size()
+    assert max(size.width(), size.height()) == 2048 and size.height() > size.width()
