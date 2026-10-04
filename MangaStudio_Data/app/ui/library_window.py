@@ -276,7 +276,7 @@ class NewBookDialog(QDialog):
 
 
 class EditBookDialog(QDialog):
-    def __init__(self, book, job_running, parent=None):
+    def __init__(self, root, book, job_running, parent=None):
         super().__init__(parent)
         self.setWindowTitle(f"Edit “{book['title']}”")
         self.setStyleSheet(
@@ -331,6 +331,18 @@ class EditBookDialog(QDialog):
 
         # Single Page Translate
         self.page_spin = QSpinBox(minimum=1, maximum=len(book["pages"]))
+        preview = QLabel()
+        preview.setFixedSize(160, 240)
+        preview.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+
+        def show_page(number):
+            path, _ = page_path(root, book, number - 1)
+            preview.setPixmap(
+                QPixmap(str(path)).scaled(preview.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+
+        self.page_spin.valueChanged.connect(show_page)
+        show_page(1)
         self.page_note = QPlainTextEdit()
         self.page_note.setFixedHeight(70)
         page_row = QHBoxLayout()
@@ -341,6 +353,7 @@ class EditBookDialog(QDialog):
         single = QWidget()
         single_layout = QVBoxLayout(single)
         single_layout.addLayout(page_row)
+        single_layout.addWidget(preview)
         single_layout.addWidget(QLabel("Instructions for this run only (optional)"))
         single_layout.addWidget(self.page_note)
         single_layout.addStretch()
@@ -700,7 +713,7 @@ class LibraryWindow(QMainWindow):
             self.refresh()
 
     def edit_book(self, book):
-        dialog = EditBookDialog(book, self.job is not None, self)
+        dialog = EditBookDialog(self.root, book, self.job is not None, self)
         if not dialog.exec():
             return
         dialog.apply(book)
