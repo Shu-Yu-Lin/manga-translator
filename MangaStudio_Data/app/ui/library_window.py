@@ -12,15 +12,41 @@ import time
 import uuid
 from pathlib import Path
 
+from omegaconf import OmegaConf
 from PySide6.QtCore import QProcess, QProcessEnvironment, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
 from PySide6.QtPdf import QPdfDocument
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
-    QFrame, QGraphicsOpacityEffect, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QProgressBar,
-    QPushButton, QRadioButton, QSizePolicy, QStackedWidget, QTableWidget, QTableWidgetItem,
-    QToolButton, QVBoxLayout, QWidget,
+    QAbstractItemView,
+    QApplication,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QFormLayout,
+    QFrame,
+    QGraphicsOpacityEffect,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
+    QMenu,
+    QMessageBox,
+    QPlainTextEdit,
+    QProgressBar,
+    QPushButton,
+    QRadioButton,
+    QSizePolicy,
+    QSpinBox,
+    QStackedWidget,
+    QTabWidget,
+    QTableWidget,
+    QTableWidgetItem,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
 )
 
 REPO = Path(__file__).resolve().parents[3]
@@ -32,6 +58,7 @@ PDF_LONG_EDGE = 2048
 
 
 # ---------------------------------------------------------------- storage
+
 
 def validate_files(files):
     """Return an error message, or None if `files` is one PDF or only images."""
@@ -46,7 +73,10 @@ def validate_files(files):
 
 
 def natural_key(path):
-    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", Path(path).name)]
+    return [
+        int(t) if t.isdigit() else t.lower()
+        for t in re.split(r"(\d+)", Path(path).name)
+    ]
 
 
 def import_files(dest, files):
@@ -62,7 +92,9 @@ def import_files(dest, files):
             name = f"{i + 1:03d}.png"
             size = doc.pagePointSize(i)
             # 2048 px long edge: the detector and OCR need big pages; a 144 dpi render was ~600x850
-            doc.render(i, (size * (PDF_LONG_EDGE / max(size.width(), size.height()))).toSize()).save(str(dest / name))
+            doc.render(
+                i, (size * (PDF_LONG_EDGE / max(size.width(), size.height()))).toSize()
+            ).save(str(dest / name))
             names.append(name)
         return names
     paths = sorted(files, key=natural_key)
@@ -74,10 +106,14 @@ def import_files(dest, files):
 
 def save_book(root, book):
     folder = root / book["id"]
-    (folder / "reader.json").write_text(json.dumps(book, ensure_ascii=False, indent=2), encoding="utf-8")
+    (folder / "reader.json").write_text(
+        json.dumps(book, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     # Terms are escaped so users type plain words; see load_dictionary for the format.
     lines = [f"{re.escape(jp)} {tr}".rstrip() for jp, tr in book["dictionary"]]
-    (folder / "dict.txt").write_text("".join(line + "\n" for line in lines), encoding="utf-8")
+    (folder / "dict.txt").write_text(
+        "".join(line + "\n" for line in lines), encoding="utf-8"
+    )
 
 
 def create_book(root, title, description, target_lang, files):
@@ -90,8 +126,15 @@ def create_book(root, title, description, target_lang, files):
         shutil.rmtree(folder, ignore_errors=True)
         raise
     book = {
-        "id": book_id, "title": title, "description": description, "target_lang": target_lang,
-        "status": "processing", "created": time.time(), "cover": None, "dictionary": [],
+        "id": book_id,
+        "title": title,
+        "description": description,
+        "target_lang": target_lang,
+        "status": "processing",
+        "created": time.time(),
+        "cover": None,
+        "dictionary": [],
+        "prompt": "",
         "pages": [{"file": name, "status": "pending"} for name in pages],
     }
     save_book(root, book)
@@ -112,7 +155,11 @@ def load_books(root):
 
 def cover_path(root, book):
     folder = root / book["id"]
-    return folder / book["cover"] if book["cover"] else folder / "source" / book["pages"][0]["file"]
+    return (
+        folder / book["cover"]
+        if book["cover"]
+        else folder / "source" / book["pages"][0]["file"]
+    )
 
 
 def page_path(root, book, index):
@@ -129,7 +176,9 @@ def failed_count(book):
 
 
 def readable(book):
-    return book["status"] != "processing" and any(p["status"] == "done" for p in book["pages"])
+    return book["status"] != "processing" and any(
+        p["status"] == "done" for p in book["pages"]
+    )
 
 
 def no_spaces(text):
@@ -137,7 +186,14 @@ def no_spaces(text):
     return "".join(text.split())
 
 
+def card_color(widget):
+    """The book-card background (also used by the dialog inputs), semi-transparent."""
+    c = widget.palette().alternateBase().color()
+    return f"rgba({c.red()}, {c.green()}, {c.blue()}, 50%)"
+
+
 # ---------------------------------------------------------------- dialogs
+
 
 class NewBookDialog(QDialog):
     def __init__(self, parent=None):
@@ -148,7 +204,9 @@ class NewBookDialog(QDialog):
         self.title = QLineEdit(placeholderText="e.g. One Piece vol. 1")
         self.description = QPlainTextEdit()
         self.description.setFixedHeight(70)
-        self.lang_buttons = {code: QRadioButton(name) for code, name in LANGUAGES.items()}
+        self.lang_buttons = {
+            code: QRadioButton(name) for code, name in LANGUAGES.items()
+        }
         self.lang_buttons["CHT"].setChecked(True)
         langs = QHBoxLayout()
         for button in self.lang_buttons.values():
@@ -168,6 +226,7 @@ class NewBookDialog(QDialog):
         form.addRow("Title", self.title)
         form.addRow("Description (optional)", self.description)
         form.addRow("Translate to", langs)
+        form.setRowVisible(langs, False)  # ponytail: only CHT supported for now, show the row when ENG is ready
         form.addRow("Pages", files_row)
         form.addRow("", self.error)
 
@@ -178,7 +237,9 @@ class NewBookDialog(QDialog):
 
         layout = QVBoxLayout(self)
         layout.addLayout(form)
-        layout.addWidget(QLabel("One PDF, or several JPG/PNG images (sorted by file name)."))
+        layout.addWidget(
+            QLabel("One PDF, or several JPG/PNG images (sorted by file name).")
+        )
         layout.addWidget(self.buttons)
         self.title.textChanged.connect(self.update_submit)
         self.update_submit()
@@ -186,80 +247,142 @@ class NewBookDialog(QDialog):
 
     def pick_files(self):
         files, _ = QFileDialog.getOpenFileNames(
-            self, "Choose pages", "", "PDF or images (*.pdf *.jpg *.jpeg *.png)")
+            self, "Choose pages", "", "PDF or images (*.pdf *.jpg *.jpeg *.png)"
+        )
         if not files:
             return
         self.files = files
         error = validate_files(files)
         self.error.setText(error or "")
         self.error.setVisible(bool(error))
-        self.files_label.setText(Path(files[0]).name if len(files) == 1 else f"{len(files)} images")
+        self.files_label.setText(
+            Path(files[0]).name if len(files) == 1 else f"{len(files)} images"
+        )
         self.update_submit()
 
     def update_submit(self):
-        self.submit.setEnabled(bool(self.title.text().strip()) and validate_files(self.files) is None)
+        self.submit.setEnabled(
+            bool(self.title.text().strip()) and validate_files(self.files) is None
+        )
 
     def values(self):
         lang = next(code for code, b in self.lang_buttons.items() if b.isChecked())
-        return self.title.text().strip(), self.description.toPlainText().strip(), lang, self.files
+        return (
+            self.title.text().strip(),
+            self.description.toPlainText().strip(),
+            lang,
+            self.files,
+        )
 
 
 class EditBookDialog(QDialog):
-    def __init__(self, root, book, job_running, parent=None):
+    def __init__(self, book, job_running, parent=None):
         super().__init__(parent)
         self.setWindowTitle(f"Edit “{book['title']}”")
-        self.new_cover = None
+        self.setStyleSheet(
+            "QLineEdit, QPlainTextEdit, QTableWidget { border: 1px solid palette(mid);"
+            f" border-radius: 4px; background: {card_color(self)}; }}"
+        )
         self.retranslate = False
+        self.retranslate_page = None  # index of the single page to redo
 
+        # Basic
         self.title = QLineEdit(book["title"])
         self.description = QPlainTextEdit(book["description"])
         self.description.setFixedHeight(70)
+        basic = QWidget()
+        form = QFormLayout(
+            basic,
+            labelAlignment=Qt.AlignLeft | Qt.AlignTop,
+            formAlignment=Qt.AlignLeft | Qt.AlignTop,
+            rowWrapPolicy=QFormLayout.WrapAllRows,  # labels above full-width fields
+            fieldGrowthPolicy=QFormLayout.AllNonFixedFieldsGrow,  # macOS style defaults to "stay at size hint"
+        )
+        form.addRow("Title", self.title)
+        form.addRow("Description", self.description)
 
-        self.cover = QLabel()
-        self.cover.setFixedSize(80, 120)
-        self.cover.setAlignment(Qt.AlignCenter)
-        self.cover.setPixmap(QPixmap(str(cover_path(root, book))).scaled(
-            self.cover.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        change_cover = QPushButton("Change cover…")
-        change_cover.clicked.connect(self.pick_cover)
-        cover_row = QHBoxLayout()
-        cover_row.addWidget(self.cover)
-        cover_row.addWidget(change_cover, 0, Qt.AlignBottom)
-        cover_row.addStretch()
-
+        # Translation Rules
+        self.prompt = QPlainTextEdit(book.get("prompt", ""))
+        self.prompt.setFixedHeight(70)
+        self.prompt.setPlaceholderText(
+            "Added to the translator's system prompt, e.g. who the characters are"
+        )
         self.table = QTableWidget(0, 2)
         self.table.setHorizontalHeaderLabels(["Japanese", "Use instead"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.horizontalHeader().setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.table.verticalHeader().hide()
         for row in book["dictionary"] + [["", ""]]:  # trailing empty row for new terms
             self.add_row(*row)
         self.table.itemChanged.connect(self.grow_table)
+        rules = QWidget()
+        rules_layout = QVBoxLayout(rules)
+        rules_layout.addWidget(QLabel("Translator notes"))
+        rules_layout.addWidget(self.prompt)
+        rules_layout.addWidget(QLabel("<b>Dictionary</b>"))
+        rules_layout.addWidget(
+            QLabel(
+                "Terms replaced in the Japanese text before translation, e.g. character names.\n"
+                "Spaces are removed. Clear a Japanese cell to remove a term."
+            )
+        )
+        rules_layout.addWidget(self.table, 1)
+        rules_layout.addWidget(QLabel("Notes and dictionary take effect when you retranslate."))
 
-        form = QFormLayout(labelAlignment=Qt.AlignLeft)
-        form.addRow("Title", self.title)
-        form.addRow("Description", self.description)
-        form.addRow("Cover", cover_row)
+        # Single Page Translate
+        self.page_spin = QSpinBox(minimum=1, maximum=len(book["pages"]))
+        self.page_note = QPlainTextEdit()
+        self.page_note.setFixedHeight(70)
+        page_row = QHBoxLayout()
+        page_row.addWidget(QLabel("Page"))
+        page_row.addWidget(self.page_spin)
+        page_row.addWidget(QLabel(f"of {len(book['pages'])}"))
+        page_row.addStretch()
+        single = QWidget()
+        single_layout = QVBoxLayout(single)
+        single_layout.addLayout(page_row)
+        single_layout.addWidget(QLabel("Instructions for this run only (optional)"))
+        single_layout.addWidget(self.page_note)
+        single_layout.addStretch()
+
+        tabs = QTabWidget()
+        tabs.addTab(basic, "Basic")
+        tabs.addTab(rules, "Translation Rules")
+        tabs.addTab(single, "Single Page Translate")
 
         buttons = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Save)
         rerun = buttons.addButton("Save && retranslate", QDialogButtonBox.AcceptRole)
-        rerun.setEnabled(not job_running)
-        if job_running:
-            rerun.setToolTip("A translation is already running")
+        redo_page = buttons.addButton("Retranslate this page", QDialogButtonBox.ActionRole)
+        for button in (rerun, redo_page):
+            button.setEnabled(not job_running)
+            if job_running:
+                button.setToolTip("A translation is already running")
         rerun.clicked.connect(lambda: setattr(self, "retranslate", True))
+        redo_page.clicked.connect(self.pick_page)
+        # the last tab has its own single action; the others share Save / Save & retranslate / Cancel
+        general = (rerun, *(buttons.button(b) for b in (QDialogButtonBox.Save, QDialogButtonBox.Cancel)))
+
+        def show_buttons(tab):
+            for button in general:
+                button.setVisible(tab != 2)
+            redo_page.setVisible(tab == 2)
+
+        tabs.currentChanged.connect(show_buttons)
+        show_buttons(0)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         self.title.textChanged.connect(
-            lambda t: buttons.button(QDialogButtonBox.Save).setEnabled(bool(t.strip())))
+            lambda t: buttons.button(QDialogButtonBox.Save).setEnabled(bool(t.strip()))
+        )
 
         layout = QVBoxLayout(self)
-        layout.addLayout(form)
-        layout.addWidget(QLabel("<b>Dictionary</b>"))
-        layout.addWidget(QLabel(
-            "Terms replaced in the Japanese text before translation, e.g. character names.\n"
-            "Spaces are removed. Takes effect when you retranslate. Clear a Japanese cell to remove a term."))
-        layout.addWidget(self.table, 1)
+        layout.addWidget(tabs)
         layout.addWidget(buttons)
-        self.resize(520, 600)
+        self.resize(520, 560)
+
+    def pick_page(self):
+        self.retranslate_page = self.page_spin.value() - 1
+        self.accept()
 
     def add_row(self, jp, tr):
         row = self.table.rowCount()
@@ -273,41 +396,41 @@ class EditBookDialog(QDialog):
             self.add_row("", "")
             self.table.blockSignals(False)
 
-    def pick_cover(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Choose cover", "", "Images (*.jpg *.jpeg *.png)")
-        if path:
-            self.new_cover = path
-            self.cover.setPixmap(QPixmap(path).scaled(
-                self.cover.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
-
-    def apply(self, root, book):
+    def apply(self, book):
         book["title"] = self.title.text().strip() or book["title"]
         book["description"] = self.description.toPlainText().strip()
-        rows = ((self.table.item(r, 0).text(), self.table.item(r, 1).text())
-                for r in range(self.table.rowCount()))
-        book["dictionary"] = [[no_spaces(jp), no_spaces(tr)] for jp, tr in rows if no_spaces(jp)]
-        if self.new_cover:
-            name = "cover" + Path(self.new_cover).suffix.lower()
-            shutil.copy(self.new_cover, root / book["id"] / name)
-            book["cover"] = name
+        book["prompt"] = self.prompt.toPlainText().strip()
+        rows = (
+            (self.table.item(r, 0).text(), self.table.item(r, 1).text())
+            for r in range(self.table.rowCount())
+        )
+        book["dictionary"] = [
+            [no_spaces(jp), no_spaces(tr)] for jp, tr in rows if no_spaces(jp)
+        ]
 
 
 # ---------------------------------------------------------------- home
+
 
 class BookCard(QFrame):
     def __init__(self, root, book, menu):
         super().__init__()
         self.setObjectName("card")
-        self.setStyleSheet("#card { border: 1px solid palette(mid); border-radius: 8px;"
-                           " background: palette(alternate-base); }")
+        self.setStyleSheet(
+            "#card { border: 1px solid palette(mid); border-radius: 8px;"
+            f" background: {card_color(self)}; }}"
+        )
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
 
         cover = QLabel()
         cover.setFixedSize(COVER_SIZE)
         cover.setAlignment(Qt.AlignCenter)
-        cover.setPixmap(QPixmap(str(cover_path(root, book))).scaled(
-            COVER_SIZE, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        cover.setPixmap(
+            QPixmap(str(cover_path(root, book))).scaled(
+                COVER_SIZE, Qt.KeepAspectRatio, Qt.SmoothTransformation
+            )
+        )
         layout.addWidget(cover)
 
         self.bar = None
@@ -315,7 +438,9 @@ class BookCard(QFrame):
             effect = QGraphicsOpacityEffect(cover)
             effect.setOpacity(0.7)
             cover.setGraphicsEffect(effect)
-            self.bar = QProgressBar(maximum=len(book["pages"]), format="Translating %p%")
+            self.bar = QProgressBar(
+                maximum=len(book["pages"]), format="Translating %p%"
+            )
             self.bar.setValue(sum(p["status"] != "pending" for p in book["pages"]))
             layout.addWidget(self.bar)
         elif book["status"] == "failed":
@@ -329,20 +454,30 @@ class BookCard(QFrame):
             more.setFixedSize(26, 26)
             more.move(COVER_SIZE.width() - 32, 6)
             # dark disc keeps the button visible on any cover
-            more.setStyleSheet("QToolButton { background: rgba(0,0,0,150); color: white; border: none;"
-                               " border-radius: 13px; } QToolButton::menu-indicator { image: none; }")
+            more.setStyleSheet(
+                "QToolButton { background: rgba(0,0,0,150); color: white; border: none;"
+                " border-radius: 13px; } QToolButton::menu-indicator { image: none; }"
+            )
             more.setMenu(menu)
             self.menu = menu  # QToolButton does not own its menu
 
         title = QLabel()
         title.setStyleSheet("font-weight: bold;")
-        title.setText(title.fontMetrics().elidedText(book["title"], Qt.ElideRight, COVER_SIZE.width()))
+        title.setText(
+            title.fontMetrics().elidedText(
+                book["title"], Qt.ElideRight, COVER_SIZE.width()
+            )
+        )
         layout.addWidget(title)
         # always present (even if empty) so every card has the same height
         description = QLabel()
         description.setStyleSheet("color: gray;")
         first_line = book["description"].split("\n")[0]
-        description.setText(description.fontMetrics().elidedText(first_line, Qt.ElideRight, COVER_SIZE.width()))
+        description.setText(
+            description.fontMetrics().elidedText(
+                first_line, Qt.ElideRight, COVER_SIZE.width()
+            )
+        )
         layout.addWidget(description)
         layout.addStretch()
         self.setToolTip(f"{book['title']}\n\n{book['description']}".strip())
@@ -358,11 +493,19 @@ class HomeView(QWidget):
         header.addStretch()
         header.addWidget(self.new_button)
 
-        self.empty = QLabel("No manga yet. Click “+ New manga” to translate your first book.")
+        self.empty = QLabel(
+            "No manga yet. Click “+ New manga” to translate your first book."
+        )
         self.empty.setAlignment(Qt.AlignCenter)
-        self.list = QListWidget(viewMode=QListWidget.IconMode, resizeMode=QListWidget.Adjust,
-                                movement=QListWidget.Static, gridSize=QSize(200, 360))
+        self.list = QListWidget(
+            viewMode=QListWidget.IconMode,
+            resizeMode=QListWidget.Adjust,
+            movement=QListWidget.Static,
+            gridSize=QSize(200, 360),
+        )
         self.list.setSelectionMode(QAbstractItemView.NoSelection)
+        self.list.setViewportMargins(12, 12, 12, 12)
+        self.list.setStyleSheet("QListWidget { background: transparent; }")
 
         layout = QVBoxLayout(self)
         layout.addLayout(header)
@@ -371,6 +514,7 @@ class HomeView(QWidget):
 
 
 # ---------------------------------------------------------------- reader
+
 
 class ReaderView(QWidget):
     back = Signal()
@@ -391,7 +535,9 @@ class ReaderView(QWidget):
 
         self.image = QLabel(alignment=Qt.AlignCenter)
         self.image.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
-        self.failed_note = QLabel("Translation failed for this page. Showing the original.")
+        self.failed_note = QLabel(
+            "Translation failed for this page. Showing the original."
+        )
         self.failed_note.setAlignment(Qt.AlignCenter)
 
         self.prev_button = QPushButton("‹ Previous")
@@ -411,9 +557,18 @@ class ReaderView(QWidget):
         layout.addLayout(bottom)
 
         for key, step in ((Qt.Key_Left, -1), (Qt.Key_Right, 1)):
-            QShortcut(QKeySequence(key), self, lambda s=step: self.go(s),
-                      context=Qt.WidgetWithChildrenShortcut)
-        QShortcut(QKeySequence(Qt.Key_Escape), self, self.back.emit, context=Qt.WidgetWithChildrenShortcut)
+            QShortcut(
+                QKeySequence(key),
+                self,
+                lambda s=step: self.go(s),
+                context=Qt.WidgetWithChildrenShortcut,
+            )
+        QShortcut(
+            QKeySequence(Qt.Key_Escape),
+            self,
+            self.back.emit,
+            context=Qt.WidgetWithChildrenShortcut,
+        )
 
     def open(self, root, book):
         self.root, self.book, self.index = root, book, 0
@@ -432,8 +587,11 @@ class ReaderView(QWidget):
 
     def fit(self):
         if self.pixmap:
-            self.image.setPixmap(self.pixmap.scaled(self.image.size(), Qt.KeepAspectRatio,
-                                                    Qt.SmoothTransformation))
+            self.image.setPixmap(
+                self.pixmap.scaled(
+                    self.image.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
+                )
+            )
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -441,6 +599,7 @@ class ReaderView(QWidget):
 
 
 # ---------------------------------------------------------------- window
+
 
 class LibraryWindow(QMainWindow):
     def __init__(self, root=DEFAULT_ROOT):
@@ -470,11 +629,17 @@ class LibraryWindow(QMainWindow):
     def refresh(self):
         running = self.job is not None
         self.home.new_button.setEnabled(not running)
-        self.home.new_button.setToolTip("A translation is already running" if running else "")
+        self.home.new_button.setToolTip(
+            "A translation is already running" if running else ""
+        )
         self.home.list.clear()
         self.cards = {}
         for book in self.books:
-            card = BookCard(self.root, book, None if book["status"] == "processing" else self.menu_for(book))
+            card = BookCard(
+                self.root,
+                book,
+                None if book["status"] == "processing" else self.menu_for(book),
+            )
             item = QListWidgetItem(self.home.list)
             item.setData(Qt.UserRole, book["id"])
             item.setSizeHint(card.sizeHint())
@@ -488,8 +653,11 @@ class LibraryWindow(QMainWindow):
     def menu_for(self, book):
         menu = QMenu()
         menu.addAction("Edit…", lambda: self.edit_book(book))
+        menu.addAction("Change cover…", lambda: self.change_cover(book))
         if book["status"] == "failed":
-            menu.addAction("Retry", lambda: self.start_job(book)).setEnabled(self.job is None)
+            menu.addAction("Retry", lambda: self.start_job(book)).setEnabled(
+                self.job is None
+            )
         menu.addSeparator()
         menu.addAction("Delete…", lambda: self.delete_book(book))
         return menu
@@ -505,31 +673,53 @@ class LibraryWindow(QMainWindow):
         dialog = NewBookDialog(self)
         if not dialog.exec():
             return
-        QApplication.setOverrideCursor(Qt.WaitCursor)  # ponytail: PDF render blocks the UI; thread it if big books freeze
+        QApplication.setOverrideCursor(
+            Qt.WaitCursor
+        )  # ponytail: PDF render blocks the UI; thread it if big books freeze
         try:
             book = create_book(self.root, *dialog.values())
         except Exception as e:
-            QMessageBox.warning(self, "Could not add manga", f"{e}\n\nCheck the files and try again.")
+            QMessageBox.warning(
+                self, "Could not add manga", f"{e}\n\nCheck the files and try again."
+            )
             return
         finally:
             QApplication.restoreOverrideCursor()
         self.books.insert(0, book)
         self.start_job(book)
 
+    def change_cover(self, book):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Choose cover", "", "Images (*.jpg *.jpeg *.png)"
+        )
+        if path:
+            name = "cover" + Path(path).suffix.lower()
+            shutil.copy(path, self.root / book["id"] / name)
+            book["cover"] = name
+            save_book(self.root, book)
+            self.refresh()
+
     def edit_book(self, book):
-        dialog = EditBookDialog(self.root, book, self.job is not None, self)
+        dialog = EditBookDialog(book, self.job is not None, self)
         if not dialog.exec():
             return
-        dialog.apply(self.root, book)
+        dialog.apply(book)
         save_book(self.root, book)
-        if dialog.retranslate:
+        if dialog.retranslate_page is not None:
+            self.start_job(book, dialog.retranslate_page, dialog.page_note.toPlainText().strip())
+        elif dialog.retranslate:
             self.start_job(book)
         else:
             self.refresh()
 
     def confirm_delete(self, book):
-        box = QMessageBox(QMessageBox.Warning, "Delete manga",
-                          f"Delete “{book['title']}”? Its pages are removed from disk.", QMessageBox.Cancel, self)
+        box = QMessageBox(
+            QMessageBox.Warning,
+            "Delete manga",
+            f"Delete “{book['title']}”? Its pages are removed from disk.",
+            QMessageBox.Cancel,
+            self,
+        )
         delete = box.addButton("Delete", QMessageBox.DestructiveRole)
         box.setDefaultButton(QMessageBox.Cancel)
         box.exec()
@@ -541,30 +731,44 @@ class LibraryWindow(QMainWindow):
             self.books.remove(book)
             self.refresh()
 
-    def start_job(self, book):
+    def start_job(self, book, page=None, note=""):
+        """Translate the whole book, or only pages[page] (with a one-shot note)."""
         folder = self.root / book["id"]
-        for old in (folder / "translated").iterdir():
-            old.unlink()
-        for page in book["pages"]:
-            page["status"] = "pending"
+        pages = book["pages"] if page is None else [book["pages"][page]]
+        for p in pages:
+            (folder / "translated" / p["file"]).unlink(missing_ok=True)
+            p["status"] = "pending"
         book["status"] = "processing"
         save_book(self.root, book)
         self.job = book
         self.refresh()
         try:
-            self.run_pipeline(book)
+            self.run_pipeline(book, page, note)
         except Exception as e:
             QMessageBox.warning(self, "Could not start translation", str(e))
             self.finish_job()
 
-    def run_pipeline(self, book):
+    def run_pipeline(self, book, page=None, note=""):
         folder = self.root / book["id"]
+        source, output = folder / "source", folder / "translated"
+        if page is not None:  # a file path for -o makes the CLI write exactly that file
+            name = book["pages"][page]["file"]
+            source, output = source / name, output / name
         base = REPO / "configs" / f"{book['target_lang'].lower()}.json"
         if not base.exists():
-            raise FileNotFoundError(f"No translation config for {LANGUAGES[book['target_lang']]} yet.")
+            raise FileNotFoundError(
+                f"No translation config for {LANGUAGES[book['target_lang']]} yet."
+            )
         config = json.loads(base.read_text(encoding="utf-8"))
-        config["translator"]["gpt_config"] = str(REPO / "configs" / "gpt_config.yaml")
-        (folder / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
+        gpt = OmegaConf.load(REPO / "configs" / "gpt_config.yaml")
+        # the template goes through str.format, so literal braces must be doubled
+        extras = [t.replace("{", "{{").replace("}", "}}") for t in (book.get("prompt", ""), note) if t]
+        gpt.chat_system_template += "".join(f"\n\n{t}" for t in extras)
+        OmegaConf.save(gpt, folder / "gpt_config.yaml")
+        config["translator"]["gpt_config"] = str(folder / "gpt_config.yaml")
+        (folder / "config.json").write_text(
+            json.dumps(config, indent=2), encoding="utf-8"
+        )
         env = QProcessEnvironment.systemEnvironment()
         if not env.contains("CUSTOM_OPENAI_MODEL"):
             env.insert("CUSTOM_OPENAI_MODEL", "gemma4:e4b")
@@ -574,11 +778,28 @@ class LibraryWindow(QMainWindow):
         self.proc.setProcessChannelMode(QProcess.MergedChannels)
         self.proc.setStandardOutputFile(str(folder / "job.log"))
         self.proc.finished.connect(self.finish_job)
-        self.proc.start(sys.executable, [
-            "-m", "manga_translator", "local", "-i", str(folder / "source"), "-o", str(folder / "translated"),
-            "--config-file", str(folder / "config.json"), "--use-gpu", "--attempts", "3", "--ignore-errors",
-            "--pre-dict", str(folder / "dict.txt"), "--post-dict", str(REPO / "configs" / "dict" / "tw.post.txt"),
-        ])
+        self.proc.start(
+            sys.executable,
+            [
+                "-m",
+                "manga_translator",
+                "local",
+                "-i",
+                str(source),
+                "-o",
+                str(output),
+                "--config-file",
+                str(folder / "config.json"),
+                "--use-gpu",
+                "--attempts",
+                "3",
+                "--ignore-errors",
+                "--pre-dict",
+                str(folder / "dict.txt"),
+                "--post-dict",
+                str(REPO / "configs" / "dict" / "tw.post.txt"),
+            ],
+        )
         if self.proc.state() == QProcess.NotRunning:
             raise RuntimeError(self.proc.errorString())
         self.timer.start()
@@ -588,7 +809,9 @@ class LibraryWindow(QMainWindow):
         for page in book["pages"]:
             if (self.root / book["id"] / "translated" / page["file"]).exists():
                 page["status"] = "done"
-        self.cards[book["id"]].bar.setValue(sum(p["status"] != "pending" for p in book["pages"]))
+        self.cards[book["id"]].bar.setValue(
+            sum(p["status"] != "pending" for p in book["pages"])
+        )
 
     def finish_job(self, *_):
         """Pages with no file in translated/ failed; a book with no page translated at all is failed."""
@@ -597,7 +820,9 @@ class LibraryWindow(QMainWindow):
         for page in book["pages"]:
             done = (self.root / book["id"] / "translated" / page["file"]).exists()
             page["status"] = "done" if done else "failed"
-        book["status"] = "done" if any(p["status"] == "done" for p in book["pages"]) else "failed"
+        book["status"] = (
+            "done" if any(p["status"] == "done" for p in book["pages"]) else "failed"
+        )
         save_book(self.root, book)
         self.job = self.proc = None
         self.refresh()
