@@ -774,9 +774,8 @@ class LibraryWindow(QMainWindow):
             )
         config = json.loads(base.read_text(encoding="utf-8"))
         gpt = OmegaConf.load(REPO / "configs" / "gpt_config.yaml")
-        # the template goes through str.format, so literal braces must be doubled
-        extras = [t.replace("{", "{{").replace("}", "}}") for t in (book.get("prompt", ""), note) if t]
-        gpt.chat_system_template += "".join(f"\n\n{t}" for t in extras)
+        # sent with the lines to translate, not in the system prompt (the model ignores it there)
+        gpt.user_notes = "\n".join(t for t in (book.get("prompt", ""), note) if t)
         OmegaConf.save(gpt, folder / "gpt_config.yaml")
         config["translator"]["gpt_config"] = str(folder / "gpt_config.yaml")
         (folder / "config.json").write_text(

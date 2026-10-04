@@ -67,7 +67,9 @@ class CustomOpenAiTranslator(ConfigGPT, CommonTranslator):
         return extracted_text.strip() if extracted_text else None
 
     def _assemble_prompts(self, from_lang: str, to_lang: str, queries: List[str]):
-        prompt = ''
+        # A 4B model follows notes next to the lines far better than at the end of the system prompt.
+        header = f'{self.user_notes}\n' if self.user_notes else ''
+        prompt = header
 
         if self._INCLUDE_TEMPLATE:
             prompt += self.prompt_template.format(to_lang=to_lang)
@@ -87,7 +89,7 @@ class CustomOpenAiTranslator(ConfigGPT, CommonTranslator):
                 if self._RETURN_PROMPT:
                     prompt += '\n<|1|>'
                 yield prompt.lstrip(), i + 1 - i_offset
-                prompt = self.prompt_template.format(to_lang=to_lang)
+                prompt = header + self.prompt_template.format(to_lang=to_lang)
                 # Restart counting at 1
                 i_offset = i + 1
 
@@ -224,12 +226,14 @@ class CustomOpenAiTranslator(ConfigGPT, CommonTranslator):
         response = await self.client.chat.completions.create(
             model=self.model or CUSTOM_OPENAI_MODEL,
             messages=messages,
-            max_tokens=self._MAX_TOKENS // 2,
+            # thinking (on when there are notes) counts toward this, so give it room
+            max_tokens=self._MAX_TOKENS if self.user_notes else self._MAX_TOKENS // 2,
             temperature=self.temperature,
             top_p=self.top_p,
             # gemma4 thinks by default and burns the whole token budget before emitting
             # anything, which returns an empty translation on text-dense pages.
-            extra_body={'reasoning_effort': 'none'},
+            # Without thinking it also ignores user notes, so think briefly when there are some.
+            extra_body={'reasoning_effort': 'low' if self.user_notes else 'none'},
         )
 
         self.logger.debug('\n-- GPT Response (raw) --')

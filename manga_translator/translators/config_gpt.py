@@ -174,6 +174,11 @@ class ConfigGPT:
         return self._config_get('prompt_template', default=self._PROMPT_TEMPLATE)
 
     @property
+    def user_notes(self) -> str:
+        """Extra instructions, sent in the user message right above the lines to translate."""
+        return self._config_get('user_notes', default='')
+
+    @property
     def chat_system_template(self) -> str:
         return self._config_get('chat_system_template', self._CHAT_SYSTEM_TEMPLATE)
 
