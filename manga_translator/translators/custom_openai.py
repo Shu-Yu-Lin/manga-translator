@@ -25,6 +25,7 @@ class CustomOpenAiTranslator(ConfigGPT, CommonTranslator):
     # Token budget; also caps how much text goes into one prompt
     _MAX_TOKENS = 4096
 
+    title_text = None  # set per page by translators.dispatch
     _RETURN_PROMPT = False
 
     _INCLUDE_TEMPLATE = False
@@ -66,9 +67,20 @@ class CustomOpenAiTranslator(ConfigGPT, CommonTranslator):
         
         return extracted_text.strip() if extracted_text else None
 
+    def _title_note(self, to_lang: str) -> str:
+        """Page 1 only: the biggest text is the title. OCR often garbles it, so give its real meaning."""
+        if not self.title_text:
+            return ''
+        note = f'This is the cover page. The line "{self.title_text}" is the title of the manga, the biggest text on the page'
+        if self.book_title:
+            return note + (f', but the text recognition garbled it. The real title is "{self.book_title}": '
+                           f'output the {to_lang} translation of that title for this line.')
+        return note + f': translate it as a short title, not as dialogue.'
+
     def _assemble_prompts(self, from_lang: str, to_lang: str, queries: List[str]):
         # A 4B model follows notes next to the lines far better than at the end of the system prompt.
-        header = f'{self.user_notes}\n' if self.user_notes else ''
+        notes = [n for n in (self.user_notes, self._title_note(to_lang)) if n]
+        header = '\n'.join(notes) + '\n' if notes else ''
         prompt = header
 
         if self._INCLUDE_TEMPLATE:

@@ -50,6 +50,7 @@ async def dispatch(chain: TranslatorChain, queries: List[str], translator_config
                 pass
             if translator_config:
                 translator.parse_args(translator_config)
+            translator.title_text = getattr(args, 'title_text', None)
             queries = await translator.translate('auto', chain.langs[flag], queries, use_mtpe)
             await translator.unload(device)
             flag+=1
@@ -62,6 +63,7 @@ async def dispatch(chain: TranslatorChain, queries: List[str], translator_config
             await translator.load('auto', tgt_lang, device)
         if translator_config:
             translator.parse_args(translator_config)
+        translator.title_text = getattr(args, 'title_text', None)
         queries = await translator.translate('auto', tgt_lang, queries, use_mtpe)
         if args is not None:
             args['translations'][tgt_lang] = queries

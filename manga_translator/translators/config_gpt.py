@@ -179,6 +179,10 @@ class ConfigGPT:
         return self._config_get('user_notes', default='')
 
     @property
+    def book_title(self) -> str:
+        return self._config_get('book_title', default='')
+
+    @property
     def chat_system_template(self) -> str:
         return self._config_get('chat_system_template', self._CHAT_SYSTEM_TEMPLATE)
 

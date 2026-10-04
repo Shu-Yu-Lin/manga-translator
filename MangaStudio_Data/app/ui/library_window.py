@@ -775,6 +775,7 @@ class LibraryWindow(QMainWindow):
         config = json.loads(base.read_text(encoding="utf-8"))
         gpt = OmegaConf.load(REPO / "configs" / "gpt_config.yaml")
         # sent with the lines to translate, not in the system prompt (the model ignores it there)
+        gpt.book_title = book["title"]  # page 1 uses it as the real title
         gpt.user_notes = "\n".join(t for t in (book.get("prompt", ""), note) if t)
         OmegaConf.save(gpt, folder / "gpt_config.yaml")
         config["translator"]["gpt_config"] = str(folder / "gpt_config.yaml")

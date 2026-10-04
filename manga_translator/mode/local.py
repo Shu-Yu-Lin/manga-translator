@@ -153,6 +153,7 @@ class MangaTranslatorLocal(MangaTranslator):
                 # One image at a time
                 start_time = time.time()
                 translated_count = 0
+                self.first_page = True  # the first file of the folder is page 1 of the book
                 for root, subdirs, files in os.walk(path):
                     files = natural_sort(files)
                     dest_root = replace_prefix(root, path, _dest)
@@ -171,6 +172,8 @@ class MangaTranslatorLocal(MangaTranslator):
                         except Exception as e:
                             logger.error(e)
                             raise e
+                        finally:
+                            self.first_page = False
                 
 
                 total_time = time.time() - start_time

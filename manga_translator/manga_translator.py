@@ -140,6 +140,7 @@ class MangaTranslator:
         self.ignore_errors = False
         self.verbose = False
         self.batch_size = 1  # no batching by default
+        self.first_page = False  # set by local mode for page 1 of a folder run
 
         self._progress_hooks = []
         self._add_logger_hook()
@@ -874,6 +875,8 @@ class MangaTranslator:
                 #  ChatGPT
                 # Automatically add context to ChatGPT, no change for other translators
                 texts = [region.text for region in ctx.text_regions]
+                if self.first_page:  # a cover: its biggest text is the title
+                    ctx.title_text = max(ctx.text_regions, key=lambda r: r.font_size).text
                 translated_sentences = \
                     await dispatch_translation(
                         config.translator.translator_gen, texts, config.translator,
