@@ -34,8 +34,9 @@ async def dispatch(args: Namespace):
         post_dict = load_dictionary(args.post_dict)
 
         if len(args.input) == 1 and os.path.isfile(args.input[0]):
-            dest = os.path.join(BASE_PATH, 'result/final.png')
-            args.overwrite = True # Do overwrite result/final.png file
+            # -o names the output file; without it, write result/final.png
+            dest = args.dest or os.path.join(BASE_PATH, 'result/final.png')
+            args.overwrite = True # Do overwrite the output file
 
             # Apply pre-translation dictionaries
             await translator.translate_path(args.input[0], dest, args_dict)
