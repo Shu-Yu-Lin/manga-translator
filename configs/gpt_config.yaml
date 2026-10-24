@@ -26,6 +26,12 @@ chat_system_template: >
   - A personal name written in katakana is a pen name - leave it in Japanese,
     do not translate or transliterate it.
 
+  - Names of apps, products, shops, services and in-story terms (such as an
+    app's name or its currency) are never left in Japanese: translate them into
+    {to_lang} characters by meaning, or by sound if they have no meaning. Never
+    leave them in Japanese and never write them in romaji or English letters.
+    Use the same translation every time.
+
   - Use the vocabulary of Taiwan, never of China: 胸部 not 奶子, 元 not 圓,
     存 not 攢, 軟體 not 软件, 影片 not 视频.
 
