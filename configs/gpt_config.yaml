@@ -16,7 +16,7 @@ chat_system_template: >
 
   - Output one line per input, each with its exact <|number|> prefix, and nothing else.
 
-  - A name written in kanji keeps those characters in {to_lang} (凛子 -> 凜子).
+  - A name written in kanji keeps those characters in {to_lang} (田中 -> 田中).
 
   - If a word is not a real word but sounds like a character's name, it is that
     name, misheard - translate it as the name.
@@ -42,12 +42,12 @@ chat_sample:
       <|1|>恥ずかしい… 目立ちたくない… 私が消えたい…
       <|2|>きみ… 大丈夫⁉
       <|3|>なんだこいつ 空気読めて ないのか…？
-      <|4|>凛子ちんはお外でしたい
+      <|4|>花子ちゃんも来る？
     - |-
       <|1|>好尷尬…我不想引人注目…我想消失…
       <|2|>你…沒事吧⁉
       <|3|>這傢伙怎麼看不懂氣氛的…？
-      <|4|>凜子醬想在外面做
+      <|4|>花子醬也要來嗎？
   English:
     - |-
       <|1|>恥ずかしい… 目立ちたくない… 私が消えたい…

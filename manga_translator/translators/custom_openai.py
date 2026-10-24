@@ -9,6 +9,7 @@ except ImportError:
     openai = None
 import asyncio
 import time
+from collections import deque
 from typing import List
 from .common import CommonTranslator, VALID_LANGUAGES
 from .keys import CUSTOM_OPENAI_API_KEY, CUSTOM_OPENAI_API_BASE, CUSTOM_OPENAI_MODEL, CUSTOM_OPENAI_MODEL_CONF
@@ -26,9 +27,9 @@ class CustomOpenAiTranslator(ConfigGPT, CommonTranslator):
     _MAX_TOKENS = 4096
 
     title_text = None  # set per page by translators.dispatch
-    _RETURN_PROMPT = False
 
-    _INCLUDE_TEMPLATE = False
+    _CHUNK_SIZE = 8  # regions per request: a 4B model keeps alignment better with short lists
+    _CONTEXT_PAIRS = 10  # earlier source => translation pairs shown with each request
 
     def __init__(self, model=None, api_base=None, api_key=None, check_openai_key=False):
         # If the user has specified a nested key to use for the model, append the key
@@ -44,6 +45,7 @@ class CustomOpenAiTranslator(ConfigGPT, CommonTranslator):
         self.client.base_url = api_base or CUSTOM_OPENAI_API_BASE
         self.token_count = 0
         self.token_count_last = 0
+        self.history = deque(maxlen=self._CONTEXT_PAIRS)  # finished pairs from earlier pages of this run
 
     def parse_args(self, args: TranslatorConfig):
         self.config = args.chatgpt_config
@@ -77,38 +79,32 @@ class CustomOpenAiTranslator(ConfigGPT, CommonTranslator):
                            f'output the {to_lang} translation of that title for this line.')
         return note + f': translate it as a short title, not as dialogue.'
 
-    def _assemble_prompts(self, from_lang: str, to_lang: str, queries: List[str]):
+    def _context_note(self, done: List[tuple]) -> str:
+        """Earlier lines (previous pages, then earlier chunks of this page) so the model keeps names and tone."""
+        pairs = (list(self.history) + done)[-self._CONTEXT_PAIRS:]
+        if not pairs:
+            return ''
+        lines = '\n'.join(f'{src} => {tr}' for src, tr in pairs)
+        return f'Earlier lines, for context only. Do not translate or repeat them:\n{lines}\n\nTranslate these lines:'
+
+    def _assemble_prompts(self, from_lang: str, to_lang: str, queries: List[str], done: List[tuple]):
         # A 4B model follows notes next to the lines far better than at the end of the system prompt.
         notes = [n for n in (self.user_notes, self._title_note(to_lang)) if n]
         header = '\n'.join(notes) + '\n' if notes else ''
-        prompt = header
 
-        if self._INCLUDE_TEMPLATE:
-            prompt += self.prompt_template.format(to_lang=to_lang)
+        def start():  # read `done` at yield time: _translate fills it as chunks finish
+            return header + self._context_note(done)
 
-        if self._RETURN_PROMPT:
-            prompt += '\nOriginal:'
-
-        i_offset = 0
+        prompt = start()
+        offset = 0
         for i, query in enumerate(queries):
-            prompt += f'\n<|{i + 1 - i_offset}|>{query}'
+            prompt += f'\n<|{i + 1 - offset}|>{query}'
+            if (i + 1 - offset) % self._CHUNK_SIZE == 0 and i + 1 < len(queries):
+                yield prompt.lstrip(), i + 1 - offset
+                prompt = start()
+                offset = i + 1
 
-            # If prompt is growing too large and there's still a lot of text left
-            # split off the rest of the queries into new prompts.
-            # 1 token = ~4 characters according to https://platform.openai.com/tokenizer
-            # TODO: potentially add summarizations from special requests as context information
-            if self._MAX_TOKENS * 2 and len(''.join(queries[i + 1:])) > self._MAX_TOKENS:
-                if self._RETURN_PROMPT:
-                    prompt += '\n<|1|>'
-                yield prompt.lstrip(), i + 1 - i_offset
-                prompt = header + self.prompt_template.format(to_lang=to_lang)
-                # Restart counting at 1
-                i_offset = i + 1
-
-        if self._RETURN_PROMPT:
-            prompt += '\n<|1|>'
-
-        yield prompt.lstrip(), len(queries) - i_offset
+        yield prompt.lstrip(), len(queries) - offset
 
     def _format_prompt_log(self, to_lang: str, prompt: str) -> str:
         if to_lang in self.chat_sample:
@@ -132,9 +128,10 @@ class CustomOpenAiTranslator(ConfigGPT, CommonTranslator):
 
     async def _translate(self, from_lang: str, to_lang: str, queries: List[str]) -> List[str]:
         translations = []
+        done = []  # (source, translation) pairs of earlier chunks of this page
         self.logger.debug(f'Temperature: {self.temperature}, TopP: {self.top_p}')
 
-        for prompt, query_size in self._assemble_prompts(from_lang, to_lang, queries):
+        for prompt, query_size in self._assemble_prompts(from_lang, to_lang, queries, done):
             self.logger.debug('-- GPT Prompt --\n' + self._format_prompt_log(to_lang, prompt))
 
             ratelimit_attempt = 0
@@ -212,7 +209,9 @@ class CustomOpenAiTranslator(ConfigGPT, CommonTranslator):
             elif len(new_translations) < query_size:
                 new_translations = new_translations + [''] * (query_size - len(new_translations))
 
-            translations.extend([t.strip() for t in new_translations])
+            chunk = [t.strip() for t in new_translations]
+            done.extend(zip(queries[len(translations):], chunk))
+            translations.extend(chunk)
 
         self.logger.debug(translations)
         if self.token_count_last:
@@ -253,3 +252,9 @@ class CustomOpenAiTranslator(ConfigGPT, CommonTranslator):
         self.token_count_last = response.usage.total_tokens
 
         return response.choices[0].message.content
+
+    async def translate(self, from_lang: str, to_lang: str, queries: List[str], use_mtpe: bool = False) -> List[str]:
+        result = await super().translate(from_lang, to_lang, queries, use_mtpe)
+        # translate() retries internally, so only its final answer goes into the history
+        self.history.extend((q, t) for q, t in zip(queries, result) if q.strip() and t.strip())
+        return result

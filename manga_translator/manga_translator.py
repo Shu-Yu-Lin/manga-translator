@@ -478,6 +478,12 @@ class MangaTranslator:
                 raise 
             ctx.textlines = [] # Fallback to empty textlines if OCR fails
 
+        if config.ocr.prob is not None:  # mocr ignores prob itself; low-confidence lines are usually garbage
+            weak = [t for t in ctx.textlines if t.prob < config.ocr.prob]
+            for t in weak:
+                logger.info(f'Dropped low-confidence OCR ({t.prob:.2f}): {t.text}')
+            ctx.textlines = [t for t in ctx.textlines if t.prob >= config.ocr.prob]
+
         if not ctx.textlines:
             await self._report_progress('skip-no-text', True)
             # If no text was found result is intermediate image product

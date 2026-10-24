@@ -9,7 +9,8 @@
     "gpt_config": "configs/gpt_config.yaml"
   },
   "ocr": {
-    "ocr": "mocr"
+    "ocr": "mocr",
+    "prob": 0.8
   },
   "inpainter": {
     "inpainter": "lama_large",

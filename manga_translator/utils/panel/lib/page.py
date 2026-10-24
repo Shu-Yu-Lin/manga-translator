@@ -156,10 +156,7 @@ class Page:
 				break
 
 			for dline in dlines[0]:
-				x0 = int(round(dline[0][0]))
-				y0 = int(round(dline[0][1]))
-				x1 = int(round(dline[0][2]))
-				y1 = int(round(dline[0][3]))
+				x0, y0, x1, y1 = (int(round(v)) for v in dline.reshape(-1))  # OpenCV 5 returns (N,4), older (N,1,4)
 
 				a = x0 - x1
 				b = y0 - y1
