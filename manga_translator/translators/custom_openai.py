@@ -255,6 +255,8 @@ class CustomOpenAiTranslator(ConfigGPT, CommonTranslator):
 
     async def translate(self, from_lang: str, to_lang: str, queries: List[str], use_mtpe: bool = False) -> List[str]:
         result = await super().translate(from_lang, to_lang, queries, use_mtpe)
-        # translate() retries internally, so only its final answer goes into the history
-        self.history.extend((q, t) for q, t in zip(queries, result) if q.strip() and t.strip())
+        # translate() retries internally, so only its final answer goes into the history.
+        # The cover (title_text set) and lines left untranslated are mostly OCR garbage: keep them out.
+        if not self.title_text:
+            self.history.extend((q, t) for q, t in zip(queries, result) if t.strip() and t != q)
         return result

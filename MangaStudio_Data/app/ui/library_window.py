@@ -114,7 +114,7 @@ def save_book(root, book):
     )
 
 
-def create_book(root, title, description, files):
+def create_book(root, title, description, files, original_title=""):
     book_id = uuid.uuid4().hex[:8]
     folder = root / book_id
     try:
@@ -127,6 +127,7 @@ def create_book(root, title, description, files):
         "id": book_id,
         "title": title,
         "description": description,
+        "original_title": original_title,
         "status": "processing",
         "created": time.time(),
         "cover": None,
@@ -199,6 +200,7 @@ class NewBookDialog(QDialog):
         self.files = []
 
         self.title = QLineEdit(placeholderText="e.g. One Piece vol. 1")
+        self.original_title = QLineEdit(placeholderText="Japanese title as printed on the cover")
         self.description = QPlainTextEdit()
         self.description.setFixedHeight(70)
 
@@ -213,6 +215,7 @@ class NewBookDialog(QDialog):
 
         form = QFormLayout(labelAlignment=Qt.AlignLeft)
         form.addRow("Title", self.title)
+        form.addRow("Japanese title (optional)", self.original_title)
         form.addRow("Description (optional)", self.description)
         form.addRow("Pages", files_row)
         form.addRow("", self.error)
@@ -257,6 +260,7 @@ class NewBookDialog(QDialog):
             self.title.text().strip(),
             self.description.toPlainText().strip(),
             self.files,
+            self.original_title.text().strip(),
         )
 
 
@@ -273,6 +277,7 @@ class EditBookDialog(QDialog):
 
         # Basic
         self.title = QLineEdit(book["title"])
+        self.original_title = QLineEdit(book.get("original_title", ""))
         self.description = QPlainTextEdit(book["description"])
         self.description.setFixedHeight(70)
         basic = QWidget()
@@ -284,6 +289,7 @@ class EditBookDialog(QDialog):
             fieldGrowthPolicy=QFormLayout.AllNonFixedFieldsGrow,  # macOS style defaults to "stay at size hint"
         )
         form.addRow("Title", self.title)
+        form.addRow("Japanese title (the cover's title helps the translator)", self.original_title)
         form.addRow("Description", self.description)
 
         # Translation Rules
@@ -396,6 +402,7 @@ class EditBookDialog(QDialog):
 
     def apply(self, book):
         book["title"] = self.title.text().strip() or book["title"]
+        book["original_title"] = self.original_title.text().strip()
         book["description"] = self.description.toPlainText().strip()
         book["prompt"] = self.prompt.toPlainText().strip()
         rows = (
@@ -755,7 +762,7 @@ class LibraryWindow(QMainWindow):
         config = json.loads((REPO / "configs" / "config.json").read_text(encoding="utf-8"))
         gpt = OmegaConf.load(REPO / config["translator"]["gpt_config"])
         # sent with the lines to translate, not in the system prompt (the model ignores it there)
-        gpt.book_title = book["title"]  # page 1 uses it as the real title
+        gpt.book_title = book.get("original_title") or book["title"]  # page 1 uses it as the real title
         gpt.user_notes = "\n".join(t for t in (book.get("prompt", ""), note) if t)
         OmegaConf.save(gpt, folder / "gpt_config.yaml")
         config["translator"]["gpt_config"] = str(folder / "gpt_config.yaml")
