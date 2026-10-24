@@ -11,7 +11,7 @@ Create a *reader* (a book) from one PDF or several images, wait for processing, 
 | Piece | What it uses |
 |---|---|
 | Languages | Japanese → Traditional Chinese (Taiwan) only |
-| OCR | `manga-ocr-base` (`mocr`) |
+| OCR | `48px` (the repo's own model). It read stylised titles and small print far better than `manga-ocr` (`mocr`) on our test pages. |
 | Translation | Local Gemma 4 E4B through Ollama (`gemma4:e4b`), via the OpenAI-compatible `custom_openai` translator |
 | Text removal | `lama_large` inpainting |
 | Reader | PySide6 desktop app |
@@ -71,7 +71,7 @@ Useful flags: `--attempts N`, `--ignore-errors`, `--pre-dict FILE`, `--post-dict
 
 ### Configuration
 
-[configs/config.json](configs/config.json) is the template the app copies for each book (`mocr`, `custom_openai`, `lama_large`). The translation prompt is [configs/gpt_config.yaml](configs/gpt_config.yaml). Dictionaries are in [configs/dict/](configs/dict/); `post.txt` (China → Taiwan wording) is applied after translation.
+[configs/config.json](configs/config.json) is the template the app copies for each book (`48px`, `custom_openai`, `lama_large`, a looser detector box threshold, OCR confidence cut-off 0.3). The translation prompt is [configs/gpt_config.yaml](configs/gpt_config.yaml). Dictionaries are in [configs/dict/](configs/dict/); `post.txt` (China → Taiwan wording) is applied after translation.
 
 The local LLM is set with environment variables (the app sets the model itself):
 
