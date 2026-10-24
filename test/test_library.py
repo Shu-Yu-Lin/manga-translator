@@ -28,7 +28,7 @@ def test_book_lifecycle(tmp_path):
     root = tmp_path / "readers"
     root.mkdir()
 
-    book = create_book(root, "Book", "", "ENG", images)
+    book = create_book(root, "Book", "", images)
     assert [p["file"] for p in book["pages"]] == ["001.png", "002.png", "003.png"]
     # natural order: p1, p2, p10
     assert QImage(str(root / book["id"] / "source" / "001.png")).size() == QImage(images[2]).size()

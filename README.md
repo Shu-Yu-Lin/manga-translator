@@ -2,7 +2,7 @@
 
 A manga translation app that runs **fully on your Mac**. Nothing is sent to the cloud.
 
-Create a *reader* (a book) from one PDF or several images, pick a target language, wait for processing, then read the translated pages with Previous / Next.
+Create a *reader* (a book) from one PDF or several images, wait for processing, then read the translated pages with Previous / Next.
 
 > Forked from [zyddnys/manga-image-translator](https://github.com/zyddnys/manga-image-translator) (GPL-3.0). The upstream pipeline (detection, OCR, inpainting, rendering) is still the core. This fork trims it down and adds a local reader app. See [Credits](#credits).
 
@@ -10,8 +10,7 @@ Create a *reader* (a book) from one PDF or several images, pick a target languag
 
 | Piece | What it uses |
 |---|---|
-| Source language | Japanese only |
-| Target language | Traditional Chinese (`CHT`) or English (`ENG`), chosen per reader |
+| Languages | Japanese → Traditional Chinese (Taiwan) only |
 | OCR | `manga-ocr-base` (`mocr`) |
 | Translation | Local Gemma 4 E4B through Ollama (`gemma4:e4b`), via the OpenAI-compatible `custom_openai` translator |
 | Text removal | `lama_large` inpainting |
@@ -51,7 +50,7 @@ Builds `~/Applications/Manga Studio.app`, a launcher for this repo's `.venv`. If
 
 ## Using the app
 
-- **Library:** a grid of covers. **+ New manga** takes a title, an optional description, the target language, and one PDF or several JPG/PNG files. Only one book is processed at a time.
+- **Library:** a grid of covers. **+ New manga** takes a title, an optional description, and one PDF or several JPG/PNG files. Only one book is processed at a time.
 - **Reading:** open a finished book. **‹ Previous** / **Next ›**, the ←/→ keys, and Esc (back to the library) all work. A failed page shows the original with a "translation failed" note.
 - **⋯ menu:** **Edit** (title, description, cover, a per-book pre-translation dictionary; save, or save and retranslate the whole book), **Retry** failed books, **Delete**.
 - **Failures:** a page that fails 3 times is skipped and marked failed. The book shows an "N pages failed" badge. A book left half-processed by an app exit loads as failed, with Retry.
@@ -64,7 +63,7 @@ The app only talks to the pipeline through the CLI and a JSON config, so you can
 
 ```bash
 uv run python -m manga_translator local -v -i <image_or_folder> --use-gpu   # output: <path>-translated
-uv run python -m manga_translator local -i <path> --config-file configs/cht.json
+uv run python -m manga_translator local -i <path> --config-file configs/config.json
 uv run python -m manga_translator config-help                               # dump the config schema
 ```
 
@@ -72,7 +71,7 @@ Useful flags: `--attempts N`, `--ignore-errors`, `--pre-dict FILE`, `--post-dict
 
 ### Configuration
 
-[configs/cht.json](configs/cht.json) is the template the app copies for each book (`mocr`, `custom_openai`, `lama_large`). The translation prompt lives in [configs/gpt_config.yaml](configs/gpt_config.yaml). Replacement dictionaries are in [configs/dict/](configs/dict/).
+[configs/config.json](configs/config.json) is the template the app copies for each book (`mocr`, `custom_openai`, `lama_large`). The translation prompt is [configs/gpt_config.yaml](configs/gpt_config.yaml). Dictionaries are in [configs/dict/](configs/dict/); `post.txt` (China → Taiwan wording) is applied after translation.
 
 The local LLM is set with environment variables (the app sets the model itself):
 
@@ -106,7 +105,7 @@ uv run pylint manga_translator
 
 ## Status
 
-The app is under active development. `ENG` readers need `configs/eng.json`, which doesn't exist yet. See [PLAN.md](PLAN.md) for decisions and the progress checklist.
+The app is under active development. Translation quality on real pages has not been checked yet. See [PLAN.md](PLAN.md) for decisions and the progress checklist.
 
 ## Credits
 

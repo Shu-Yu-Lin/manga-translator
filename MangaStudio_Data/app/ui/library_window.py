@@ -37,7 +37,6 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
-    QRadioButton,
     QSizePolicy,
     QSpinBox,
     QStackedWidget,
@@ -52,7 +51,6 @@ from PySide6.QtWidgets import (
 REPO = Path(__file__).resolve().parents[3]
 DEFAULT_ROOT = Path.home() / "Library" / "Application Support" / "MangaStudio"
 IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
-LANGUAGES = {"CHT": "Traditional Chinese", "ENG": "English"}
 COVER_SIZE = QSize(160, 240)
 PDF_LONG_EDGE = 2048
 
@@ -116,7 +114,7 @@ def save_book(root, book):
     )
 
 
-def create_book(root, title, description, target_lang, files):
+def create_book(root, title, description, files):
     book_id = uuid.uuid4().hex[:8]
     folder = root / book_id
     try:
@@ -129,7 +127,6 @@ def create_book(root, title, description, target_lang, files):
         "id": book_id,
         "title": title,
         "description": description,
-        "target_lang": target_lang,
         "status": "processing",
         "created": time.time(),
         "cover": None,
@@ -204,14 +201,6 @@ class NewBookDialog(QDialog):
         self.title = QLineEdit(placeholderText="e.g. One Piece vol. 1")
         self.description = QPlainTextEdit()
         self.description.setFixedHeight(70)
-        self.lang_buttons = {
-            code: QRadioButton(name) for code, name in LANGUAGES.items()
-        }
-        self.lang_buttons["CHT"].setChecked(True)
-        langs = QHBoxLayout()
-        for button in self.lang_buttons.values():
-            langs.addWidget(button)
-        langs.addStretch()
 
         pick = QPushButton("Choose PDF or images…")
         pick.clicked.connect(self.pick_files)
@@ -225,8 +214,6 @@ class NewBookDialog(QDialog):
         form = QFormLayout(labelAlignment=Qt.AlignLeft)
         form.addRow("Title", self.title)
         form.addRow("Description (optional)", self.description)
-        form.addRow("Translate to", langs)
-        form.setRowVisible(langs, False)  # ponytail: only CHT supported for now, show the row when ENG is ready
         form.addRow("Pages", files_row)
         form.addRow("", self.error)
 
@@ -266,11 +253,9 @@ class NewBookDialog(QDialog):
         )
 
     def values(self):
-        lang = next(code for code, b in self.lang_buttons.items() if b.isChecked())
         return (
             self.title.text().strip(),
             self.description.toPlainText().strip(),
-            lang,
             self.files,
         )
 
@@ -767,13 +752,8 @@ class LibraryWindow(QMainWindow):
         if page is not None:  # a file path for -o makes the CLI write exactly that file
             name = book["pages"][page]["file"]
             source, output = source / name, output / name
-        base = REPO / "configs" / f"{book['target_lang'].lower()}.json"
-        if not base.exists():
-            raise FileNotFoundError(
-                f"No translation config for {LANGUAGES[book['target_lang']]} yet."
-            )
-        config = json.loads(base.read_text(encoding="utf-8"))
-        gpt = OmegaConf.load(REPO / "configs" / "gpt_config.yaml")
+        config = json.loads((REPO / "configs" / "config.json").read_text(encoding="utf-8"))
+        gpt = OmegaConf.load(REPO / config["translator"]["gpt_config"])
         # sent with the lines to translate, not in the system prompt (the model ignores it there)
         gpt.book_title = book["title"]  # page 1 uses it as the real title
         gpt.user_notes = "\n".join(t for t in (book.get("prompt", ""), note) if t)
@@ -810,7 +790,7 @@ class LibraryWindow(QMainWindow):
                 "--pre-dict",
                 str(folder / "dict.txt"),
                 "--post-dict",
-                str(REPO / "configs" / "dict" / "tw.post.txt"),
+                str(REPO / "configs" / "dict" / "post.txt"),
             ],
         )
         if self.proc.state() == QProcess.NotRunning:
