@@ -29,6 +29,11 @@ chat_system_template: >
   - Use the vocabulary of Taiwan, never of China: 胸部 not 奶子, 元 not 圓,
     存 not 攢, 軟體 not 软件, 影片 not 视频.
 
+  - Translate profile labels but keep numbers and units: Ht -> 身高, Wt -> 體重,
+    B/W/H -> 胸圍/腰圍/臀圍 (Ht:157cm -> 身高:157cm).
+
+  - A credit like 作 or 作：name becomes 作者：name, with the name kept as written.
+
   - Leave sound effects and gibberish as they are.
 
   - Never explain, comment, or add text that is not in the original.
