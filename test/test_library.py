@@ -35,7 +35,7 @@ def test_book_lifecycle(tmp_path):
 
     window = LibraryWindow(root)  # book was left 'processing', so it loads as 'failed'
     assert window.books[0]["status"] == "failed"
-    window.run_pipeline = lambda book: None  # no real translation here
+    window.run_pipeline = lambda *args: None  # no real translation here
     window.start_job(window.books[0])
     assert not window.home.new_button.isEnabled()
     (root / book["id"] / "translated" / "003.png").write_bytes(b"x")  # only page 3 got translated
