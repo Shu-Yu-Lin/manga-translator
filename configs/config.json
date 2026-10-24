@@ -15,5 +15,8 @@
   "inpainter": {
     "inpainter": "lama_large",
     "inpainting_precision": "fp32"
+  },
+  "detector": {
+    "box_threshold": 0.5
   }
 }

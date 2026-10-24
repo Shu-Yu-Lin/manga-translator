@@ -10,6 +10,7 @@ except ImportError:
 import asyncio
 import time
 from collections import deque
+from difflib import SequenceMatcher
 from typing import List
 from .common import CommonTranslator, VALID_LANGUAGES
 from .keys import CUSTOM_OPENAI_API_KEY, CUSTOM_OPENAI_API_BASE, CUSTOM_OPENAI_MODEL, CUSTOM_OPENAI_MODEL_CONF
@@ -46,6 +47,7 @@ class CustomOpenAiTranslator(ConfigGPT, CommonTranslator):
         self.token_count = 0
         self.token_count_last = 0
         self.history = deque(maxlen=self._CONTEXT_PAIRS)  # finished pairs from earlier pages of this run
+        self.title_pair = None  # (cover title as OCR read it, its translation)
 
     def parse_args(self, args: TranslatorConfig):
         self.config = args.chatgpt_config
@@ -254,9 +256,22 @@ class CustomOpenAiTranslator(ConfigGPT, CommonTranslator):
         return response.choices[0].message.content
 
     async def translate(self, from_lang: str, to_lang: str, queries: List[str], use_mtpe: bool = False) -> List[str]:
-        result = await super().translate(from_lang, to_lang, queries, use_mtpe)
+        # The cover title shows up again on later pages, where OCR garbles it a little differently:
+        # reuse the cover's translation so the title stays the same everywhere.
+        fixed = {}
+        if self.title_pair and not self.title_text:
+            fixed = {i: self.title_pair[1] for i, q in enumerate(queries)
+                     if SequenceMatcher(None, q, self.title_pair[0]).ratio() >= 0.7}
+        rest = [q for i, q in enumerate(queries) if i not in fixed]
+        got = iter(await super().translate(from_lang, to_lang, rest, use_mtpe) if rest else [])
+        result = [fixed[i] if i in fixed else next(got) for i in range(len(queries))]
+
+        if self.title_text:
+            for q, t in zip(queries, result):
+                if q == self.title_text and t.strip() and t != q:
+                    self.title_pair = (q, t)
         # translate() retries internally, so only its final answer goes into the history.
         # The cover (title_text set) and lines left untranslated are mostly OCR garbage: keep them out.
-        if not self.title_text:
+        else:
             self.history.extend((q, t) for q, t in zip(queries, result) if t.strip() and t != q)
         return result
